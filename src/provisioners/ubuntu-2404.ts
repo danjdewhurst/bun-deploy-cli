@@ -21,13 +21,6 @@ apt-get upgrade -y -qq
 echo "Installing essential packages..."
 apt-get install -y -qq curl git ufw fail2ban htop jq build-essential debian-keyring debian-archive-keyring apt-transport-https
 
-# Install Caddy
-echo "Installing Caddy..."
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt-get update -qq
-apt-get install -y -qq caddy
-
 # Configure UFW firewall
 echo "Configuring firewall..."
 ufw default deny incoming
@@ -42,12 +35,6 @@ echo "Configuring fail2ban..."
 systemctl enable fail2ban
 systemctl start fail2ban
 
-# Install Bun
-echo "Installing Bun..."
-export BUN_INSTALL=/usr/local
-curl -fsSL https://bun.sh/install | bash
-ln -sf /usr/local/bin/bun /usr/local/bin/bun
-
 # Install Node.js via Volta (optional but useful for compatibility)
 echo "Installing Volta for Node.js management..."
 curl https://get.volta.sh | bash -s -- --skip-setup
@@ -61,7 +48,6 @@ if ! id "deploy" &> /dev/null; then
   useradd -m -s /bin/bash -G sudo deploy
   # Allow deploy user to use sudo without password for specific commands
   echo "deploy ALL=(ALL) NOPASSWD: /bin/systemctl * bun-deploy-*" > /etc/sudoers.d/bun-deploy
-  echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/caddy" >> /etc/sudoers.d/bun-deploy
 fi
 
 # Set up /var/www directory
@@ -77,7 +63,7 @@ systemctl start unattended-upgrades
 
 # Configure logrotate
 echo "Setting up log rotation..."
-cat > /etc/logrotate.d/bun-deploy <> 'EOF'
+cat > /etc/logrotate.d/bun-deploy << 'EOF'
 /var/www/*/logs/*.log {
   daily
   rotate 14
@@ -87,15 +73,8 @@ cat > /etc/logrotate.d/bun-deploy <> 'EOF'
   notifempty
   create 0644 deploy deploy
   sharedscripts
-  postrotate
-    caddy reload --config /etc/caddy/Caddyfile > /dev/null 2>&1 || true
-  endscript
 }
 EOF
-
-# Configure Caddy
-systemctl enable caddy
-systemctl start caddy
 
 # Create logs directory template
 mkdir -p /var/log/bun-deploy
@@ -106,8 +85,7 @@ echo "Installed:"
 echo "  - System updates"
 echo "  - UFW firewall"
 echo "  - Fail2ban"
-echo "  - Bun $(bun --version)"
-echo "  - Caddy $(caddy version | head -1)"
+echo "  - Volta/Node.js"
 echo "  - Deploy user"
 `;
 
@@ -141,18 +119,16 @@ export async function provisionUbuntu2404(server: ServerConfig): Promise<void> {
 
       // Verify installation
       console.log("\nVerifying installation...");
-      const bunVersion = await client.exec("bun --version");
-      const caddyVersion = await client.exec("caddy version");
       const ufwStatus = await client.exec("ufw status | head -1");
+      const nodeVersion = await client.exec("node --version");
 
-      console.log(`Bun version: ${bunVersion.stdout.trim()}`);
-      console.log(`Caddy: ${caddyVersion.stdout.trim()}`);
       console.log(`Firewall: ${ufwStatus.stdout.trim()}`);
+      console.log(`Node.js: ${nodeVersion.stdout.trim()}`);
 
       // Update server state to ready
       server.state = "ready";
       server.provisionedAt = new Date().toISOString();
-      server.installedApps = ["bun", "caddy", "ufw", "fail2ban"];
+      server.installedApps = ["ufw", "fail2ban"];
       await saveServer(server);
     } catch (error) {
       // Update server state to error

@@ -6,6 +6,7 @@ import type { AppConfig, AppTypeHandler } from "../../types/index.js";
 export class BunAppHandler implements AppTypeHandler {
   readonly name = "bun-app";
   readonly description = "Bun.js application with HTTP server";
+  readonly requiredServices = ["bun", "caddy"];
 
   async validate(config: AppConfig): Promise<boolean> {
     // Basic validation - ensure port is specified

@@ -2,6 +2,8 @@
  * Service Registry - Plugin system for server infrastructure services
  */
 import type { ServiceHandler } from "../types/index.js";
+import { BunHandler } from "./bun/index.js";
+import { CaddyHandler } from "./caddy/index.js";
 import { MariaDBHandler } from "./mariadb/index.js";
 import { MeilisearchHandler } from "./meilisearch/index.js";
 import { MinioHandler } from "./minio/index.js";
@@ -10,6 +12,8 @@ import { RedisHandler } from "./redis/index.js";
 const handlers = new Map<string, ServiceHandler>();
 
 // Register built-in handlers
+registerService(new BunHandler());
+registerService(new CaddyHandler());
 registerService(new RedisHandler());
 registerService(new MariaDBHandler());
 registerService(new MeilisearchHandler());
