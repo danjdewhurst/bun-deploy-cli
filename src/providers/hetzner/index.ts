@@ -268,6 +268,7 @@ class HetznerProvider implements CloudProvider {
         username: "root",
         state: server.status === "running" ? "unprovisioned" : "error",
         installedApps: [],
+        installedServices: [],
       };
 
       await saveFn(serverConfig);

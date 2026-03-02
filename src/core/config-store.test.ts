@@ -80,6 +80,7 @@ describe("config-store", () => {
       state: "ready",
       provisionedAt: "2025-03-02T12:00:00Z",
       installedApps: ["nginx", "node"],
+      installedServices: [],
     });
 
     test("save and get server", async () => {
@@ -142,6 +143,7 @@ describe("config-store", () => {
         username: "root",
         state: "unprovisioned",
         installedApps: [],
+        installedServices: [],
       };
 
       await saveServer(minimalServer);
@@ -158,6 +160,7 @@ describe("config-store", () => {
       username: "root",
       state: "ready",
       installedApps: [],
+      installedServices: [],
     });
 
     const createTestApp = (suffix: string, serverName: string): AppConfig => ({
@@ -300,6 +303,7 @@ describe("config-store", () => {
         username: "root",
         state: "ready",
         installedApps: [],
+        installedServices: [],
       };
 
       await saveServer(server);
@@ -315,6 +319,7 @@ describe("config-store", () => {
         username: "root",
         state: "ready",
         installedApps: [],
+        installedServices: [],
       };
       await saveServer(server);
 
@@ -341,6 +346,7 @@ describe("config-store", () => {
         username: "root",
         state: "ready",
         installedApps: [],
+        installedServices: [],
       };
       await saveServer(server);
 

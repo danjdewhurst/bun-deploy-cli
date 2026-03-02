@@ -14,6 +14,7 @@ export interface ServerConfig {
   state: ServerState;
   provisionedAt?: string;
   installedApps: string[];
+  installedServices: string[];
 }
 
 export interface AppConfig {
@@ -56,6 +57,77 @@ export interface AppTypeHandler {
 
   /** Health check endpoint/path */
   getHealthCheck(config: AppConfig): { path: string; expectedStatus: number };
+}
+
+// ============================================================================
+// Service Types - Infrastructure services installable on servers
+// ============================================================================
+
+export interface ServiceConfig {
+  name: string;
+  version?: string;
+  port?: number;
+  environment?: Record<string, string>;
+  // Service-specific options
+  options?: Record<string, unknown>;
+}
+
+export interface ServiceInstallResult {
+  success: boolean;
+  message: string;
+  port?: number;
+  credentials?: {
+    username?: string;
+    password?: string;
+    database?: string;
+    [key: string]: string | undefined;
+  };
+  error?: Error;
+}
+
+export interface ServiceStatus {
+  installed: boolean;
+  running: boolean;
+  version?: string;
+  port?: number;
+  uptime?: string;
+}
+
+/**
+ * Service handler interface for infrastructure services.
+ * Implement this to add support for new services (databases, caches, etc.)
+ */
+export interface ServiceHandler {
+  readonly name: string;
+  readonly description: string;
+  readonly category: "database" | "cache" | "search" | "storage" | "queue" | "other";
+
+  /** Default port for this service */
+  readonly defaultPort: number;
+
+  /** Check if service is installed on the server */
+  isInstalled(server: ServerConfig): Promise<boolean>;
+
+  /** Check if service is running */
+  isRunning(server: ServerConfig): Promise<boolean>;
+
+  /** Install the service on a server */
+  install(server: ServerConfig, config?: ServiceConfig): Promise<ServiceInstallResult>;
+
+  /** Uninstall/remove the service from a server */
+  remove(server: ServerConfig): Promise<{ success: boolean; message: string }>;
+
+  /** Get service status */
+  getStatus(server: ServerConfig): Promise<ServiceStatus>;
+
+  /** Generate systemd service file content */
+  generateSystemdService(config?: ServiceConfig): string;
+
+  /** Get setup commands to run after installation */
+  getPostInstallCommands(config?: ServiceConfig): string[];
+
+  /** Get environment variables for apps to connect to this service */
+  getConnectionEnv(server: ServerConfig, config?: ServiceConfig): Record<string, string>;
 }
 
 export interface SSHExecResult {

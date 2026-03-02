@@ -430,7 +430,9 @@ WantedBy=multi-user.target
     const bytes = randomBytes(length);
     let password = "";
     for (let i = 0; i < length; i++) {
-      password += chars[bytes[i] % chars.length];
+      const byte = bytes[i];
+      if (byte === undefined) continue;
+      password += chars[byte % chars.length];
     }
     return password;
   }

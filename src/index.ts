@@ -26,6 +26,13 @@ import {
   setupServer,
   testConnection,
 } from "./commands/server.js";
+import {
+  installService,
+  listServerServicesCommand,
+  listServicesCommand,
+  removeService,
+  serviceStatusCommand,
+} from "./commands/service.js";
 import { getConfigValue, setConfigValue } from "./core/config-store.js";
 
 const program = new Command();
@@ -201,6 +208,47 @@ appCmd
   .option("--follow, -f", "Follow log output")
   .action(async (name, options) => {
     await streamLogs(name, options.follow);
+  });
+
+// Service commands
+const serviceCmd = program.command("service").description("Manage server services");
+
+serviceCmd
+  .command("list")
+  .description("List available services")
+  .action(async () => {
+    await listServicesCommand();
+  });
+
+serviceCmd
+  .command("install <server> <service>")
+  .description("Install a service on a server")
+  .option("--port <port>", "Custom port for the service")
+  .option("--version <version>", "Specific version to install")
+  .action(async (server, service, options) => {
+    await installService(server, service, options);
+  });
+
+serviceCmd
+  .command("remove <server> <service>")
+  .description("Remove a service from a server")
+  .option("--force", "Skip confirmation prompt")
+  .action(async (server, service, options) => {
+    await removeService(server, service, options.force);
+  });
+
+serviceCmd
+  .command("status <server>")
+  .description("Show service status for a server")
+  .action(async (server) => {
+    await serviceStatusCommand(server);
+  });
+
+serviceCmd
+  .command("ls <server>")
+  .description("List services installed on a server")
+  .action(async (server) => {
+    await listServerServicesCommand(server);
   });
 
 // Config commands

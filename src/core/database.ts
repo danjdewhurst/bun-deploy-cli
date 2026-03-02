@@ -65,7 +65,7 @@ export function getDatabasePath(): string {
 /**
  * Current schema version - increment when making schema changes
  */
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Initialize database schema
@@ -150,5 +150,19 @@ function runMigrations(database: Database, fromVersion: number): void {
     // Indices for performance
     database.run("CREATE INDEX IF NOT EXISTS idx_apps_server ON apps(server_name)");
     database.run("CREATE INDEX IF NOT EXISTS idx_apps_type ON apps(app_type)");
+  }
+
+  if (fromVersion < 2) {
+    // Add installed_services column to servers table
+    // Use IF NOT EXISTS equivalent for SQLite (check pragma then add)
+    const tableInfo = database
+      .query("SELECT name FROM pragma_table_info('servers') WHERE name = 'installed_services'")
+      .get() as { name: string } | undefined;
+
+    if (!tableInfo) {
+      database.run(`
+        ALTER TABLE servers ADD COLUMN installed_services TEXT DEFAULT '[]'
+      `);
+    }
   }
 }

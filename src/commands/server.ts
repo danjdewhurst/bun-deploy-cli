@@ -44,6 +44,7 @@ export async function addServer(name: string, options: AddServerOptions): Promis
     sshKeyPassphrase: options.passphrase,
     state: "unprovisioned",
     installedApps: [],
+    installedServices: [],
   };
 
   // Validate connection

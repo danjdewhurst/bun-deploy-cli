@@ -118,8 +118,8 @@ export async function saveServer(config: ServerConfig): Promise<void> {
   db.prepare(
     `
     INSERT OR REPLACE INTO servers
-    (name, host, port, username, ssh_key_path, ssh_key_passphrase, state, provisioned_at, installed_apps)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (name, host, port, username, ssh_key_path, ssh_key_passphrase, state, provisioned_at, installed_apps, installed_services)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
   ).run(
     config.name,
@@ -131,6 +131,7 @@ export async function saveServer(config: ServerConfig): Promise<void> {
     config.state,
     config.provisionedAt ?? null,
     JSON.stringify(config.installedApps),
+    JSON.stringify(config.installedServices),
   );
 }
 
@@ -147,6 +148,7 @@ export async function getServer(name: string): Promise<ServerConfig | null> {
         state: string;
         provisioned_at: string | null;
         installed_apps: string;
+        installed_services: string;
       }
     | undefined;
 
@@ -162,6 +164,7 @@ export async function getServer(name: string): Promise<ServerConfig | null> {
     state: row.state as ServerConfig["state"],
     provisionedAt: row.provisioned_at ?? undefined,
     installedApps: parseJsonArray(row.installed_apps),
+    installedServices: parseJsonArray(row.installed_services),
   };
 }
 
@@ -177,6 +180,7 @@ export async function listServers(): Promise<ServerConfig[]> {
     state: string;
     provisioned_at: string | null;
     installed_apps: string;
+    installed_services: string;
   }>;
 
   return rows.map((row) => ({
@@ -189,6 +193,7 @@ export async function listServers(): Promise<ServerConfig[]> {
     state: row.state as ServerConfig["state"],
     provisionedAt: row.provisioned_at ?? undefined,
     installedApps: parseJsonArray(row.installed_apps),
+    installedServices: parseJsonArray(row.installed_services),
   }));
 }
 
