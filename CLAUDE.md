@@ -109,3 +109,63 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+---
+
+## Project Structure
+
+This is a CLI tool for deploying applications to Ubuntu servers.
+
+```
+src/
+  commands/      # CLI command handlers (server.ts, app.ts, config.ts)
+  core/          # Core abstractions (config-store.ts, ssh-client.ts)
+  provisioners/  # Server setup scripts (ubuntu-2404.ts)
+  app-types/     # Pluggable app type handlers
+    bun-app/     # Bun.js applications
+    laravel-app/ # Laravel 12 + PHP 8.4 applications
+  types/         # Shared TypeScript interfaces
+  index.ts       # CLI entry point
+```
+
+## Adding New App Types
+
+To add support for a new application type:
+
+1. Create `src/app-types/my-app/index.ts`
+2. Implement the `AppTypeHandler` interface
+3. Register in `src/app-types/index.ts`
+
+Example:
+```typescript
+export class MyAppHandler implements AppTypeHandler {
+  readonly name = "my-app";
+  readonly description = "Description";
+
+  async validate(config: AppConfig): Promise<boolean> { return true; }
+  generateDeployScript(config: AppConfig): string { return ""; }
+  generateNginxConfig(config: AppConfig): string { return ""; }
+  generateSystemdService(config: AppConfig): string { return ""; }
+  getSetupCommands(config: AppConfig): string[] { return []; }
+  getHealthCheck(config: AppConfig): { path: string; expectedStatus: number } {
+    return { path: "/health", expectedStatus: 200 };
+  }
+}
+```
+
+## Code Style
+
+- Use **Biome** for formatting and linting: `bun run check`
+- 2-space indentation, double quotes, trailing commas
+- Organise imports with Biome (automated on check)
+
+## Testing
+
+Use `bun test` for unit tests. Integration tests should mock SSH connections.
+
+## CLI Patterns
+
+- Use Commander.js for argument parsing
+- Validate early, exit with `process.exit(1)` on errors
+- Use `console.log` for output, `console.error` for errors
+- Follow existing command structure: `bun-deploy <resource> <action> <name>`
