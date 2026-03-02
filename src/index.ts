@@ -12,6 +12,14 @@ import {
   streamLogs,
 } from "./commands/app.js";
 import {
+  configureProvider,
+  createProviderServer,
+  deleteProviderServer,
+  listProviderServers,
+  providerStatus,
+  syncProviderServers,
+} from "./commands/provider.js";
+import {
   addServer,
   listServersCommand,
   removeServerCommand,
@@ -21,6 +29,11 @@ import {
 import { getConfigValue, setConfigValue } from "./core/config-store.js";
 
 const program = new Command();
+
+// Helper function to collect multiple option values
+function collect(value: string, previous: string[]): string[] {
+  return previous.concat([value]);
+}
 
 program
   .name("bun-deploy")
@@ -74,6 +87,122 @@ serverCmd
   .description("Test SSH connection to a server")
   .action(async (name) => {
     await testConnection(name);
+  });
+
+// Provider commands - unified interface for all cloud providers
+const providerCmd = program.command("provider").description("Manage cloud providers");
+
+providerCmd
+  .command("status")
+  .description("Check all provider statuses")
+  .action(async () => {
+    await providerStatus();
+  });
+
+providerCmd
+  .command("configure <provider>")
+  .description("Configure a cloud provider with credentials")
+  .option("--token <token>", "API token (for providers that use tokens)")
+  .option("--key <key>", "API key (for providers that use keys)")
+  .option("--secret <secret>", "API secret (for providers that use key+secret)")
+  .option("--region <region>", "Default region")
+  .action(async (provider, options) => {
+    const credentials: Record<string, string> = {};
+    if (options.token) credentials.token = options.token;
+    if (options.key) credentials.key = options.key;
+    if (options.secret) credentials.secret = options.secret;
+    if (options.region) credentials.region = options.region;
+    await configureProvider(provider, credentials);
+  });
+
+providerCmd
+  .command("list [provider]")
+  .description("List cloud servers from all or a specific provider")
+  .action(async (provider) => {
+    await listProviderServers(provider);
+  });
+
+providerCmd
+  .command("create <provider> <name>")
+  .description("Create a new cloud server")
+  .option("--type <type>", "Server/instance type")
+  .option("--location <location>", "Datacenter location/region")
+  .option("--image <image>", "OS image")
+  .option("--ssh-key <name>", "SSH key name to add")
+  .option("--label <label>", "Labels to add (key=value, can be used multiple times)", collect, [])
+  .action(async (provider, name, options) => {
+    await createProviderServer(provider, name, options);
+  });
+
+providerCmd
+  .command("delete <provider> <identifier>")
+  .description("Delete a cloud server by name or ID")
+  .option("--force", "Skip confirmation prompt")
+  .action(async (provider, identifier, options) => {
+    await deleteProviderServer(provider, identifier, options.force);
+  });
+
+providerCmd
+  .command("sync [provider]")
+  .description("Sync cloud servers to local configuration")
+  .option("--prefix <prefix>", "Only sync servers with names starting with this prefix")
+  .action(async (provider, options) => {
+    await syncProviderServers(provider, options.prefix);
+  });
+
+// Hetzner Cloud commands - backward compatibility, delegates to provider
+const hcloudCmd = program
+  .command("hcloud")
+  .description("Manage Hetzner Cloud servers (alias for 'provider' with hetzner)");
+
+hcloudCmd
+  .command("status")
+  .description("Check hcloud CLI installation and configuration")
+  .action(async () => {
+    await providerStatus();
+  });
+
+hcloudCmd
+  .command("setup")
+  .description("Configure hcloud CLI with your API token")
+  .requiredOption("--token <token>", "Hetzner Cloud API token")
+  .action(async (options) => {
+    await configureProvider("hetzner", { token: options.token });
+  });
+
+hcloudCmd
+  .command("list")
+  .description("List Hetzner Cloud servers")
+  .action(async () => {
+    await listProviderServers("hetzner");
+  });
+
+hcloudCmd
+  .command("create <name>")
+  .description("Create a new Hetzner Cloud server")
+  .option("--type <type>", "Server type (e.g., cx22, cx32, cpx11)", "cx22")
+  .option("--location <location>", "Datacenter location (e.g., nbg1, fsn1, hel1)", "nbg1")
+  .option("--image <image>", "OS image (e.g., ubuntu-24.04, debian-12)", "ubuntu-24.04")
+  .option("--ssh-key <name>", "SSH key name to add to the server")
+  .option("--label <label>", "Labels to add (can be used multiple times)", collect, [])
+  .action(async (name, options) => {
+    await createProviderServer("hetzner", name, options);
+  });
+
+hcloudCmd
+  .command("delete <name>")
+  .description("Delete a Hetzner Cloud server")
+  .option("--force", "Skip confirmation prompt")
+  .action(async (name, options) => {
+    await deleteProviderServer("hetzner", name, options.force);
+  });
+
+hcloudCmd
+  .command("sync")
+  .description("Sync Hetzner Cloud servers to local configuration")
+  .option("--prefix <prefix>", "Only sync servers with names starting with this prefix")
+  .action(async (options) => {
+    await syncProviderServers("hetzner", options.prefix);
   });
 
 // App commands

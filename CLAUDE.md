@@ -118,8 +118,11 @@ This is a CLI tool for deploying applications to Ubuntu servers.
 
 ```
 src/
-  commands/      # CLI command handlers (server.ts, app.ts, config.ts)
+  commands/      # CLI command handlers (server.ts, app.ts, config.ts, provider.ts)
   core/          # Core abstractions (config-store.ts, ssh-client.ts)
+  providers/     # Cloud provider implementations
+    index.ts     # Provider registry
+    hetzner/     # Hetzner Cloud provider
   provisioners/  # Server setup scripts (ubuntu-2404.ts)
   app-types/     # Pluggable app type handlers
     bun-app/     # Bun.js applications
@@ -162,6 +165,90 @@ export class MyAppHandler implements AppTypeHandler {
 ## Testing
 
 Use `bun test` for unit tests. Integration tests should mock SSH connections.
+
+## Cloud Provider System
+
+The CLI has an extensible provider system that supports both CLI-based and API-based cloud providers.
+
+### Universal Provider Commands
+
+```bash
+# Check all provider statuses
+bun-deploy provider status
+
+# Configure a provider
+bun-deploy provider configure hetzner --token <your-token>
+
+# List servers from all configured providers
+bun-deploy provider list
+bun-deploy provider list hetzner  # specific provider
+
+# Create a server via any provider
+bun-deploy provider create hetzner my-server --type cx22 --location nbg1
+
+# Sync servers to local config
+bun-deploy provider sync
+bun-deploy provider sync hetzner --prefix my-project-
+
+# Delete a server
+bun-deploy provider delete hetzner my-server --force
+```
+
+### Hetzner Cloud (Backward Compatible)
+
+The `hcloud` commands remain as aliases to the provider system:
+
+```bash
+bun-deploy hcloud status      # Same as: provider status
+bun-deploy hcloud setup       # Same as: provider configure hetzner
+bun-deploy hcloud list        # Same as: provider list hetzner
+bun-deploy hcloud create      # Same as: provider create hetzner
+bun-deploy hcloud sync        # Same as: provider sync hetzner
+bun-deploy hcloud delete      # Same as: provider delete hetzner
+```
+
+## Adding New Cloud Providers
+
+To add support for a new cloud provider (e.g., AWS, DigitalOcean, Linode):
+
+1. Create `src/providers/your-provider/index.ts`
+2. Implement the `CloudProvider` interface
+3. Register in `src/providers/index.ts` with `registerProvider()`
+
+Example provider implementation:
+
+```typescript
+import type { CloudProvider, CloudServer, CreateServerOptions, ProviderStatus } from "../../types/index.js";
+
+class MyProvider implements CloudProvider {
+  readonly name = "myprovider";
+  readonly displayName = "My Cloud Provider";
+  readonly description = "Description of the provider";
+  readonly type = "api"; // or "cli"
+
+  async isAvailable(): Promise<boolean> { return true; }
+  async isConfigured(): Promise<boolean> { return true; }
+  async configure(credentials: Record<string, string>): Promise<void> {}
+  async getStatus(): Promise<ProviderStatus> { return { available: true, configured: true }; }
+  async listServers(): Promise<CloudServer[]> { return []; }
+  async createServer(options: CreateServerOptions): Promise<CloudServer> { throw new Error("Not implemented"); }
+  async deleteServer(identifier: string): Promise<void> {}
+  async getServer(identifier: string): Promise<CloudServer | null> { return null; }
+  async syncServers(saveFn: (config: ServerConfig) => Promise<void>, filter?: (server: CloudServer) => boolean): Promise<number> { return 0; }
+}
+
+export function myProvider(): CloudProvider {
+  return new MyProvider();
+}
+```
+
+Then register it:
+
+```typescript
+// src/providers/index.ts
+import { myProvider } from "./your-provider/index.js";
+registerProvider("myprovider", myProvider);
+```
 
 ## CLI Patterns
 
