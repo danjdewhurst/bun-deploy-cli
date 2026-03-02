@@ -3,11 +3,13 @@
  */
 import type { AppConfig, AppTypeHandler } from "../types/index.js";
 import { BunAppHandler } from "./bun-app/index.js";
+import { LaravelAppHandler } from "./laravel-app/index.js";
 
 const handlers = new Map<string, AppTypeHandler>();
 
 // Register built-in handlers
 registerAppType(new BunAppHandler());
+registerAppType(new LaravelAppHandler());
 
 export function registerAppType(handler: AppTypeHandler): void {
   handlers.set(handler.name, handler);

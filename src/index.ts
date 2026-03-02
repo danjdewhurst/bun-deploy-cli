@@ -88,7 +88,7 @@ appCmd
   .description("Create a new app")
   .requiredOption("--server <name>", "Server to deploy to")
   .requiredOption("--repo <url>", "Git repository URL")
-  .option("--type <type>", "App type (bun-app)", "bun-app")
+  .option("--type <type>", "App type (bun-app, laravel-app)", "bun-app")
   .option("--branch <branch>", "Git branch to deploy", "main")
   .option("--domain <domain>", "Domain name for the app")
   .option("--port <port>", "Internal port for the app")
