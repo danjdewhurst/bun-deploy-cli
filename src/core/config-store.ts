@@ -1,7 +1,7 @@
 /**
  * Configuration Storage - Local JSON config management (~/.bun-deploy/)
  */
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AppConfig, GlobalConfig, ServerConfig } from "../types/index.js";
@@ -14,8 +14,11 @@ const GLOBAL_CONFIG_FILE = join(CONFIG_DIR, "config.json");
 async function ensureDir(path: string): Promise<void> {
   try {
     await mkdir(path, { recursive: true });
-  } catch (error) {
-    // Directory already exists
+  } catch (error: unknown) {
+    // Directory already exists or other error - ignore
+    if (error instanceof Error && "code" in error && error.code !== "EEXIST") {
+      throw error;
+    }
   }
 }
 
@@ -23,14 +26,31 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
   try {
     const content = await readFile(path, "utf-8");
     return JSON.parse(content) as T;
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    // File doesn't exist - expected case for new configs
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return null;
+    }
+    // Re-throw unexpected errors (permissions, corrupt JSON, etc.)
+    throw error;
   }
 }
 
 async function writeJsonFile<T>(path: string, data: T): Promise<void> {
   await ensureDir(dirname(path));
-  await writeFile(path, JSON.stringify(data, null, 2), "utf-8");
+  const tempPath = `${path}.tmp.${Date.now()}`;
+  try {
+    await writeFile(tempPath, JSON.stringify(data, null, 2), "utf-8");
+    await rename(tempPath, path);
+  } catch (error) {
+    // Clean up temp file on error
+    try {
+      await unlink(tempPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
 }
 
 function dirname(path: string): string {
@@ -94,8 +114,11 @@ export async function removeServer(name: string): Promise<boolean> {
   try {
     await unlink(path);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -104,8 +127,11 @@ export async function serverExists(name: string): Promise<boolean> {
   try {
     const s = await stat(path);
     return s.isFile();
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -149,8 +175,11 @@ export async function removeApp(name: string): Promise<boolean> {
   try {
     await unlink(path);
     return true;
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -159,8 +188,11 @@ export async function appExists(name: string): Promise<boolean> {
   try {
     const s = await stat(path);
     return s.isFile();
-  } catch {
-    return false;
+  } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
   }
 }
 

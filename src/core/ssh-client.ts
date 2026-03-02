@@ -5,6 +5,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { ConnectConfig } from "ssh2";
 import { Client } from "ssh2";
 import type { ServerConfig, SSHExecResult } from "../types/index.js";
 
@@ -17,26 +18,26 @@ export class SSHClient {
   }
 
   async connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const { host, port, username, sshKeyPath, sshKeyPassphrase } = this.serverConfig;
+    const { host, port, username, sshKeyPath, sshKeyPassphrase } = this.serverConfig;
 
-      const connectConfig: any = {
-        host,
-        port: port || 22,
-        username,
-        readyTimeout: 30000,
-      };
+    const connectConfig: ConnectConfig = {
+      host,
+      port: port || 22,
+      username,
+      readyTimeout: 30000,
+    };
 
-      if (sshKeyPath) {
-        const keyPath = sshKeyPath.startsWith("~/")
-          ? join(homedir(), sshKeyPath.slice(2))
-          : sshKeyPath;
-        connectConfig.privateKey = readFile(keyPath);
-        if (sshKeyPassphrase) {
-          connectConfig.passphrase = sshKeyPassphrase;
-        }
+    if (sshKeyPath) {
+      const keyPath = sshKeyPath.startsWith("~/")
+        ? join(homedir(), sshKeyPath.slice(2))
+        : sshKeyPath;
+      connectConfig.privateKey = await readFile(keyPath);
+      if (sshKeyPassphrase) {
+        connectConfig.passphrase = sshKeyPassphrase;
       }
+    }
 
+    return new Promise((resolve, reject) => {
       this.client
         .on("ready", () => {
           this.connected = true;
@@ -172,8 +173,8 @@ export class SSHClient {
     // Upload the script
     await this.uploadContent(scriptContent, remoteScriptPath);
 
-    // Make it executable and run it
-    const execCommand = `chmod +x ${remoteScriptPath} && ${cwd ? `cd ${cwd} && ` : ""}${remoteScriptPath}; rm -f ${remoteScriptPath}`;
+    // Make it executable and run it - cleanup is included in the command so it always runs
+    const execCommand = `chmod +x ${remoteScriptPath} && ${cwd ? `cd ${cwd} && ` : ""}${remoteScriptPath}; EXIT_CODE=$?; rm -f ${remoteScriptPath}; exit $EXIT_CODE`;
     const command = sudo ? `sudo bash -c '${execCommand}'` : execCommand;
 
     return this.exec(command);

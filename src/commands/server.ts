@@ -9,7 +9,8 @@ import {
   saveServer,
   serverExists,
 } from "../core/config-store.js";
-import { SSHClient } from "../core/ssh-client.js";
+import { SSHClient, withServer } from "../core/ssh-client.js";
+import { validateName } from "../core/validation.js";
 import { provisionUbuntu2404 } from "../provisioners/ubuntu-2404.js";
 import type { ServerConfig, ServerState } from "../types/index.js";
 
@@ -22,6 +23,13 @@ interface AddServerOptions {
 }
 
 export async function addServer(name: string, options: AddServerOptions): Promise<void> {
+  // Validate server name
+  const nameValidation = validateName(name, "server");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
   if (await serverExists(name)) {
     console.error(`Error: Server '${name}' already exists.`);
     process.exit(1);
@@ -97,6 +105,13 @@ function getStateColour(state: ServerState): string {
 }
 
 export async function removeServerCommand(name: string, force = false): Promise<void> {
+  // Validate server name
+  const nameValidation = validateName(name, "server");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
   const server = await getServer(name);
 
   if (!server) {
@@ -169,20 +184,17 @@ export async function testConnection(name: string): Promise<void> {
 
   console.log(`Testing connection to ${server.host}...`);
 
-  const client = new SSHClient(server);
-
   try {
-    await client.connect();
-    console.log("Connection successful!");
+    await withServer(server, async (client) => {
+      console.log("Connection successful!");
 
-    // Run a simple command to verify
-    const result = await client.exec("whoami");
-    console.log(`Logged in as: ${result.stdout.trim()}`);
+      // Run a simple command to verify
+      const result = await client.exec("whoami");
+      console.log(`Logged in as: ${result.stdout.trim()}`);
 
-    const uptime = await client.exec("uptime -p");
-    console.log(`Server uptime: ${uptime.stdout.trim()}`);
-
-    client.disconnect();
+      const uptime = await client.exec("uptime -p");
+      console.log(`Server uptime: ${uptime.stdout.trim()}`);
+    });
   } catch (error) {
     console.error(`Connection failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);

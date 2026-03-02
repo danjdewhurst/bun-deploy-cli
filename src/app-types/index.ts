@@ -1,7 +1,7 @@
 /**
  * App Type Registry - Plugin system for supporting different app types
  */
-import type { AppConfig, AppTypeHandler } from "../types/index.js";
+import type { AppTypeHandler } from "../types/index.js";
 import { BunAppHandler } from "./bun-app/index.js";
 import { LaravelAppHandler } from "./laravel-app/index.js";
 

@@ -129,7 +129,7 @@ WantedBy=multi-user.target
     ];
   }
 
-  getHealthCheck(config: AppConfig): { path: string; expectedStatus: number } {
+  getHealthCheck(_config: AppConfig): { path: string; expectedStatus: number } {
     return {
       path: "/health",
       expectedStatus: 200,

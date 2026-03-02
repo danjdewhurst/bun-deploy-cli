@@ -13,6 +13,13 @@ import {
   saveApp,
 } from "../core/config-store.js";
 import { withServer } from "../core/ssh-client.js";
+import {
+  shellEscape,
+  validateBranchName,
+  validateEnvKey,
+  validateGitUrl,
+  validateName,
+} from "../core/validation.js";
 import type { AppConfig, DeployResult } from "../types/index.js";
 
 interface CreateAppOptions {
@@ -25,6 +32,28 @@ interface CreateAppOptions {
 }
 
 export async function createApp(name: string, options: CreateAppOptions): Promise<void> {
+  // Validate app name
+  const nameValidation = validateName(name, "app");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
+  // Validate git URL
+  const urlValidation = validateGitUrl(options.repo);
+  if (!urlValidation.valid) {
+    console.error(`Error: ${urlValidation.error}`);
+    process.exit(1);
+  }
+
+  // Validate branch name if provided
+  const branch = options.branch || "main";
+  const branchValidation = validateBranchName(branch);
+  if (!branchValidation.valid) {
+    console.error(`Error: ${branchValidation.error}`);
+    process.exit(1);
+  }
+
   if (await appExists(name)) {
     console.error(`Error: App '${name}' already exists.`);
     process.exit(1);
@@ -53,6 +82,14 @@ export async function createApp(name: string, options: CreateAppOptions): Promis
     process.exit(1);
   }
 
+  // Check for port collisions and find an available port
+  const existingApps = await listAppsByServer(options.server);
+  const usedPorts = new Set(existingApps.map((app) => app.port));
+  let port = options.port ? parseInt(options.port, 10) : 3000;
+  while (usedPorts.has(port)) {
+    port++;
+  }
+
   const appConfig: AppConfig = {
     name,
     serverName: options.server,
@@ -61,7 +98,7 @@ export async function createApp(name: string, options: CreateAppOptions): Promis
     gitBranch: options.branch || "main",
     domain: options.domain,
     envVars: {},
-    port: options.port ? parseInt(options.port, 10) : 3000,
+    port,
   };
 
   // Validate the configuration
@@ -138,18 +175,20 @@ export async function deployApp(name: string): Promise<void> {
 
       // Step 1: Ensure app directory exists
       console.log("Setting up app directory...");
-      await client.exec(`sudo mkdir -p ${appDir}`);
-      await client.exec(`sudo chown deploy:deploy ${appDir}`);
+      await client.exec(`sudo mkdir -p ${shellEscape(appDir)}`);
+      await client.exec(`sudo chown deploy:deploy ${shellEscape(appDir)}`);
 
       // Step 2: Clone or pull the repository
       console.log("Fetching code...");
-      const checkDir = await client.exec(`test -d ${appDir}/.git && echo "exists"`);
+      const checkDir = await client.exec(
+        `test -d ${shellEscape(`${appDir}/.git`)} && echo "exists"`,
+      );
       const dirExists = checkDir.stdout.trim() === "exists";
 
       if (dirExists) {
         // Pull latest changes
         const pullResult = await client.exec(
-          `cd ${appDir} && sudo -u deploy git fetch origin && sudo -u deploy git reset --hard origin/${app.gitBranch}`,
+          `cd ${shellEscape(appDir)} && sudo -u deploy git fetch origin && sudo -u deploy git reset --hard ${shellEscape(`origin/${app.gitBranch}`)}`,
         );
         if (pullResult.code !== 0) {
           throw new Error(`Git pull failed: ${pullResult.stderr}`);
@@ -157,7 +196,7 @@ export async function deployApp(name: string): Promise<void> {
       } else {
         // Clone the repository
         const cloneResult = await client.exec(
-          `sudo -u deploy git clone -b ${app.gitBranch} ${app.gitRepo} ${appDir}`,
+          `sudo -u deploy git clone -b ${shellEscape(app.gitBranch)} ${shellEscape(app.gitRepo)} ${shellEscape(appDir)}`,
         );
         if (cloneResult.code !== 0) {
           throw new Error(`Git clone failed: ${cloneResult.stderr}`);
@@ -166,7 +205,7 @@ export async function deployApp(name: string): Promise<void> {
 
       // Get current commit hash
       const commitResult = await client.exec(
-        `cd ${appDir} && sudo -u deploy git rev-parse --short HEAD`,
+        `cd ${shellEscape(appDir)} && sudo -u deploy git rev-parse --short HEAD`,
       );
       const commitHash = commitResult.stdout.trim();
 
@@ -175,9 +214,10 @@ export async function deployApp(name: string): Promise<void> {
       const envContent = Object.entries(app.envVars)
         .map(([key, value]) => `${key}=${value}`)
         .join("\n");
-      await client.uploadContent(envContent, `/tmp/${app.name}.env`);
+      const tmpEnvPath = `/tmp/${app.name}.env`;
+      await client.uploadContent(envContent, tmpEnvPath);
       await client.exec(
-        `sudo mv /tmp/${app.name}.env ${appDir}/.env && sudo chown deploy:deploy ${appDir}/.env`,
+        `sudo mv ${shellEscape(tmpEnvPath)} ${shellEscape(`${appDir}/.env`)} && sudo chown deploy:deploy ${shellEscape(`${appDir}/.env`)}`,
       );
 
       // Step 4: Setup (first time only)
@@ -195,13 +235,14 @@ export async function deployApp(name: string): Promise<void> {
       // Step 5: Execute deployment script
       console.log("Running deployment script...");
       const deployScript = handler.generateDeployScript(app);
-      await client.uploadContent(deployScript, `/tmp/deploy-${app.name}.sh`);
-      await client.exec(`chmod +x /tmp/deploy-${app.name}.sh`);
+      const deployScriptPath = `/tmp/deploy-${app.name}.sh`;
+      await client.uploadContent(deployScript, deployScriptPath);
+      await client.exec(`chmod +x ${shellEscape(deployScriptPath)}`);
 
       const deployResult = await client.exec(
-        `cd ${appDir} && sudo -u deploy /tmp/deploy-${app.name}.sh`,
+        `cd ${shellEscape(appDir)} && sudo -u deploy ${shellEscape(deployScriptPath)}`,
       );
-      await client.exec(`rm -f /tmp/deploy-${app.name}.sh`);
+      await client.exec(`rm -f ${shellEscape(deployScriptPath)}`);
 
       if (deployResult.code !== 0) {
         throw new Error(`Deployment script failed: ${deployResult.stderr}`);
@@ -210,22 +251,22 @@ export async function deployApp(name: string): Promise<void> {
       // Step 6: Configure systemd service
       console.log("Configuring service...");
       const serviceFile = handler.generateSystemdService(app);
-      await client.uploadContent(serviceFile, `/tmp/${app.name}.service`);
-      await client.exec(
-        `sudo mv /tmp/${app.name}.service /etc/systemd/system/bun-deploy-${app.name}.service`,
-      );
+      const tmpServicePath = `/tmp/${app.name}.service`;
+      const systemServicePath = `/etc/systemd/system/bun-deploy-${app.name}.service`;
+      await client.uploadContent(serviceFile, tmpServicePath);
+      await client.exec(`sudo mv ${shellEscape(tmpServicePath)} ${shellEscape(systemServicePath)}`);
       await client.exec("sudo systemctl daemon-reload");
-      await client.exec(`sudo systemctl enable bun-deploy-${app.name}`);
-      await client.exec(`sudo systemctl restart bun-deploy-${app.name}`);
+      await client.exec(`sudo systemctl enable ${shellEscape(`bun-deploy-${app.name}`)}`);
+      await client.exec(`sudo systemctl restart ${shellEscape(`bun-deploy-${app.name}`)}`);
 
       // Step 7: Configure Nginx
       console.log("Configuring Nginx...");
       const nginxConfig = handler.generateNginxConfig(app);
-      await client.uploadContent(nginxConfig, `/tmp/${app.name}.nginx`);
-      await client.exec(`sudo mv /tmp/${app.name}.nginx /etc/nginx/sites-available/${app.name}`);
-      await client.exec(
-        `sudo ln -sf /etc/nginx/sites-available/${app.name} /etc/nginx/sites-enabled/`,
-      );
+      const tmpNginxPath = `/tmp/${app.name}.nginx`;
+      const sitesAvailablePath = `/etc/nginx/sites-available/${app.name}`;
+      await client.uploadContent(nginxConfig, tmpNginxPath);
+      await client.exec(`sudo mv ${shellEscape(tmpNginxPath)} ${shellEscape(sitesAvailablePath)}`);
+      await client.exec(`sudo ln -sf ${shellEscape(sitesAvailablePath)} /etc/nginx/sites-enabled/`);
 
       // Test Nginx config
       const nginxTest = await client.exec("sudo nginx -t");
@@ -235,26 +276,39 @@ export async function deployApp(name: string): Promise<void> {
 
       await client.exec("sudo systemctl reload nginx");
 
-      // Step 8: Health check
+      // Step 8: Health check with retry logic
       console.log("Running health check...");
       const healthCheck = handler.getHealthCheck(app);
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait for app to start
 
-      const healthResult = await client.exec(
-        `curl -sf http://localhost:${app.port}${healthCheck.path} -o /dev/null && echo "OK" || echo "FAIL"`,
-      );
+      const maxAttempts = 10;
+      const delayMs = 1000;
+      let healthPassed = false;
 
-      if (healthResult.stdout.trim() !== "OK") {
-        console.warn("Warning: Health check did not pass. Check app logs.");
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+        const healthResult = await client.exec(
+          `curl -sf http://localhost:${app.port}${healthCheck.path} -o /dev/null && echo "OK" || echo "FAIL"`,
+        );
+
+        if (healthResult.stdout.trim() === "OK") {
+          healthPassed = true;
+          break;
+        }
+      }
+
+      if (!healthPassed) {
+        console.warn("Warning: Health check did not pass after 10 attempts. Check app logs.");
       } else {
         console.log("Health check passed!");
       }
 
-      return {
+      const result: DeployResult = {
         success: true,
         message: "Deployment successful",
         commit: commitHash,
-      } as DeployResult;
+      };
+      return result;
     });
 
     // Update app config with deployment metadata
@@ -276,6 +330,13 @@ export async function deployApp(name: string): Promise<void> {
 }
 
 export async function removeAppCommand(name: string, force = false): Promise<void> {
+  // Validate app name
+  const nameValidation = validateName(name, "app");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
   const app = await getApp(name);
 
   if (!app) {
@@ -307,6 +368,13 @@ export async function manageEnv(
   key?: string,
   value?: string,
 ): Promise<void> {
+  // Validate app name
+  const nameValidation = validateName(name, "app");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
   const app = await getApp(name);
 
   if (!app) {
@@ -338,6 +406,13 @@ export async function manageEnv(
       process.exit(1);
     }
 
+    // Validate env key
+    const keyValidation = validateEnvKey(key);
+    if (!keyValidation.valid) {
+      console.error(`Error: ${keyValidation.error}`);
+      process.exit(1);
+    }
+
     app.envVars[key] = value;
     await saveApp(app);
     console.log(`Set ${key}=${value} for app '${name}'.`);
@@ -348,6 +423,13 @@ export async function manageEnv(
   if (action === "unset") {
     if (!key) {
       console.error("Error: Usage: bun-deploy app env <name> unset <key>");
+      process.exit(1);
+    }
+
+    // Validate env key
+    const keyValidation = validateEnvKey(key);
+    if (!keyValidation.valid) {
+      console.error(`Error: ${keyValidation.error}`);
       process.exit(1);
     }
 
@@ -363,6 +445,13 @@ export async function manageEnv(
 }
 
 export async function streamLogs(name: string, follow = false): Promise<void> {
+  // Validate app name
+  const nameValidation = validateName(name, "app");
+  if (!nameValidation.valid) {
+    console.error(`Error: ${nameValidation.error}`);
+    process.exit(1);
+  }
+
   const app = await getApp(name);
 
   if (!app) {

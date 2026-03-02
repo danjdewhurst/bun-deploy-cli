@@ -10,6 +10,7 @@
  * - Node.js/Bun asset building
  * - Laravel Optimisations (cache, route, view, config)
  */
+import { randomBytes } from "node:crypto";
 import type { AppConfig, AppTypeHandler } from "../../types/index.js";
 
 /** Laravel-specific environment variables (all optional) */
@@ -70,8 +71,8 @@ export class LaravelAppHandler implements AppTypeHandler {
     const appDir = `/var/www/${config.name}`;
     const useQueueWorker = config.envVars.QUEUE_CONNECTION !== "sync";
     const useScheduler = config.envVars.USE_SCHEDULER === "true";
-    const useHorizon =
-      config.envVars.QUEUE_CONNECTION === "redis" && config.envVars.USE_HORIZON === "true";
+    // Horizon status referenced indirectly in queue worker restart logic
+    void config.envVars.USE_HORIZON;
 
     return `#!/bin/bash
 set -e
@@ -398,12 +399,15 @@ WantedBy=multi-user.target
       const dbUser = config.envVars.DB_USERNAME || config.name.replace(/[^a-zA-Z0-9_]/g, "_");
       const dbPass = config.envVars.DB_PASSWORD || this.generateRandomPassword();
 
+      // Escape password for shell (single quote handling)
+      const escapedPass = dbPass.replace(/'/g, "'\\''");
+
       commands.push(
-        `sudo mysql -e "CREATE DATABASE IF NOT EXISTS ${dbName};"`,
-        `sudo mysql -e "CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${dbPass}';"`,
-        `sudo mysql -e "GRANT ALL PRIVILEGES ON ${dbName}.* TO '${dbUser}'@'localhost';"`,
+        `sudo mysql -e "CREATE DATABASE IF NOT EXISTS \`${dbName}\`;"`,
+        `sudo mysql -e "CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${escapedPass}';"`,
+        `sudo mysql -e "GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${dbUser}'@'localhost';"`,
         `sudo mysql -e "FLUSH PRIVILEGES;"`,
-        `echo "Database credentials - Name: ${dbName}, User: ${dbUser}, Pass: ${dbPass}"`,
+        `echo "Database credentials - Name: ${dbName}, User: ${dbUser}"`,
       );
     }
 
@@ -446,9 +450,10 @@ WantedBy=multi-user.target
 
   private generateRandomPassword(length = 16): string {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    const bytes = randomBytes(length);
     let password = "";
     for (let i = 0; i < length; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+      password += chars[bytes[i] % chars.length];
     }
     return password;
   }
