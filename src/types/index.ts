@@ -126,6 +126,12 @@ export interface ServiceHandler {
   /** Generate systemd service file content */
   generateSystemdService(config?: ServiceConfig): string;
 
+  /** Generate bash install script */
+  generateInstallScript(config?: ServiceConfig): string;
+
+  /** Generate bash remove/uninstall script */
+  generateRemoveScript(config?: ServiceConfig): string;
+
   /** Get setup commands to run after installation */
   getPostInstallCommands(config?: ServiceConfig): string[];
 

@@ -61,4 +61,38 @@ export class BunHandler implements ServiceHandler {
       PATH: "/usr/local/bin:$PATH",
     };
   }
+
+  generateInstallScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+
+echo "Installing Bun..."
+
+# Install Bun
+export BUN_INSTALL=/usr/local
+curl -fsSL https://bun.sh/install | bash
+
+# Ensure bun is in PATH
+ln -sf /usr/local/bin/bun /usr/local/bin/bun 2>/dev/null || true
+
+# Verify installation
+if /usr/local/bin/bun --version; then
+    echo "Bun installed successfully"
+else
+    echo "Bun installation may have failed"
+    exit 1
+fi
+
+echo "Bun installation complete"
+`;
+  }
+
+  generateRemoveScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+rm -f /usr/local/bin/bun
+rm -rf /usr/local/bin/bun /usr/local/bun
+rm -rf ~/.bun
+`;
+  }
 }

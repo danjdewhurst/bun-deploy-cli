@@ -83,4 +83,69 @@ WantedBy=multi-user.target
       CADDY_PORT: String(config?.port ?? this.defaultPort),
     };
   }
+
+  generateInstallScript(config?: ServiceConfig): string {
+    const port = config?.port ?? this.defaultPort;
+
+    return `#!/bin/bash
+set -e
+
+echo "Installing Caddy..."
+
+# Install dependencies
+apt-get update -qq
+apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https
+
+# Add Caddy's official repository
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+
+# Install Caddy
+apt-get update -qq
+apt-get install -y -qq caddy
+
+# Create Caddy user if not exists
+if ! id "caddy" &>/dev/null; then
+    useradd --system --home /var/lib/caddy --shell /usr/sbin/nologin caddy
+fi
+
+# Set up Caddy directories
+mkdir -p /etc/caddy/sites
+mkdir -p /var/lib/caddy
+mkdir -p /var/log/caddy
+chown -R caddy:caddy /var/lib/caddy /var/log/caddy
+
+# Create main Caddyfile
+cat > /etc/caddy/Caddyfile << 'EOF'
+# Main Caddyfile - imports all site configurations
+import /etc/caddy/sites/*.Caddyfile
+EOF
+
+chown caddy:caddy /etc/caddy/Caddyfile
+
+# Allow deploy user to reload Caddy
+echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/caddy" > /etc/sudoers.d/bun-deploy-caddy
+
+systemctl daemon-reload
+systemctl enable caddy
+systemctl start caddy
+
+echo "Caddy installed and running on port ${port}"
+`;
+  }
+
+  generateRemoveScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+systemctl stop caddy || true
+systemctl disable caddy || true
+apt-get remove -y caddy || true
+apt-get autoremove -y || true
+rm -rf /etc/caddy /var/lib/caddy /var/log/caddy
+rm -f /etc/apt/sources.list.d/caddy-stable.list
+rm -f /etc/sudoers.d/bun-deploy-caddy
+userdel caddy 2>/dev/null || true
+systemctl daemon-reload
+`;
+  }
 }

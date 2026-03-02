@@ -84,4 +84,62 @@ WantedBy=multi-user.target
       REDIS_URL: `redis://localhost:${port}`,
     };
   }
+
+  generateInstallScript(config?: ServiceConfig): string {
+    const port = config?.port ?? this.defaultPort;
+
+    return `#!/bin/bash
+set -e
+
+echo "Installing Redis..."
+
+# Install Redis
+apt-get update -qq
+apt-get install -y -qq redis-server
+
+# Configure Redis
+cat > /etc/redis/redis.conf << 'EOF'
+port ${port}
+bind 127.0.0.1
+supervised systemd
+maxmemory 256mb
+maxmemory-policy allkeys-lru
+save 900 1
+save 300 10
+save 60 10000
+databases 16
+loglevel notice
+logfile /var/log/redis/redis-server.log
+pidfile /run/redis/redis-server.pid
+EOF
+
+chown redis:redis /etc/redis/redis.conf
+
+# Create systemd override for port
+mkdir -p /etc/systemd/system/redis-server.service.d
+cat > /etc/systemd/system/redis-server.service.d/override.conf << 'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/bin/redis-server /etc/redis/redis.conf
+EOF
+
+systemctl daemon-reload
+systemctl enable redis-server
+systemctl restart redis-server
+
+echo "Redis installation complete"
+`;
+  }
+
+  generateRemoveScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+systemctl stop redis-server || true
+systemctl disable redis-server || true
+apt-get remove -y redis-server || true
+apt-get autoremove -y || true
+rm -rf /etc/redis /var/log/redis /var/lib/redis
+userdel redis 2>/dev/null || true
+`;
+  }
 }

@@ -105,6 +105,68 @@ WantedBy=multi-user.target
     };
   }
 
+  generateInstallScript(config?: ServiceConfig): string {
+    const port = config?.port ?? this.defaultPort;
+    const consolePort = 9001;
+    const rootUser = (config?.options?.rootUser as string) ?? "minioadmin";
+    const rootPassword = this.generatePassword();
+
+    return `#!/bin/bash
+set -e
+
+echo "Installing MinIO..."
+
+# Create minio-user
+if ! id "minio-user" &>/dev/null; then
+    useradd -r -s /bin/false -d /var/lib/minio minio-user
+fi
+
+# Download MinIO binary
+curl -L "https://dl.min.io/server/minio/release/linux-amd64/minio" -o /usr/local/bin/minio
+chmod +x /usr/local/bin/minio
+
+# Download MinIO client
+curl -L "https://dl.min.io/client/mc/release/linux-amd64/mc" -o /usr/local/bin/mc
+chmod +x /usr/local/bin/mc
+
+# Create data directory
+mkdir -p /var/lib/minio/data
+chown -R minio-user:minio-user /var/lib/minio
+
+# Create environment file
+cat > /etc/default/minio << EOF
+MINIO_ROOT_USER=${rootUser}
+MINIO_ROOT_PASSWORD=${rootPassword}
+MINIO_VOLUMES=/var/lib/minio/data
+MINIO_OPTS="--address :${port} --console-address :${consolePort}"
+EOF
+
+chmod 600 /etc/default/minio
+
+# Store credentials
+echo "root_user=${rootUser}" > /etc/minio-credentials.env
+echo "root_password=${rootPassword}" >> /etc/minio-credentials.env
+chmod 600 /etc/minio-credentials.env
+
+echo "MinIO root user: ${rootUser}"
+echo "MinIO root password: ${rootPassword}"
+echo "MinIO installation complete"
+`;
+  }
+
+  generateRemoveScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+systemctl stop minio || true
+systemctl disable minio || true
+rm -f /etc/systemd/system/minio.service
+rm -f /usr/local/bin/minio /usr/local/bin/mc
+rm -rf /var/lib/minio /etc/default/minio
+userdel minio-user 2>/dev/null || true
+systemctl daemon-reload
+`;
+  }
+
   private generatePassword(): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
     let password = "";

@@ -88,6 +88,67 @@ WantedBy=multi-user.target
     };
   }
 
+  generateInstallScript(config?: ServiceConfig): string {
+    const port = config?.port ?? this.defaultPort;
+    const rootPassword = this.generatePassword();
+
+    return `#!/bin/bash
+set -e
+
+echo "Installing MariaDB..."
+
+apt-get update -qq
+apt-get install -y -qq mariadb-server mariadb-client
+
+# Secure installation
+cat > /tmp/mysql-secure.sql << 'EOF'
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${rootPassword}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\\\_%';
+FLUSH PRIVILEGES;
+EOF
+
+mysql -u root < /tmp/mysql-secure.sql
+rm -f /tmp/mysql-secure.sql
+
+# Store credentials
+echo "root_password=${rootPassword}" > /etc/mysql/bun-deploy-credentials.env
+chmod 600 /etc/mysql/bun-deploy-credentials.env
+
+# Configure bind address
+cat > /etc/mysql/conf.d/bun-deploy.cnf << 'EOF'
+[mysqld]
+bind-address = 127.0.0.1
+port = ${port}
+max_connections = 100
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+default_storage_engine = InnoDB
+innodb_buffer_pool_size = 256M
+EOF
+
+chmod 644 /etc/mysql/conf.d/bun-deploy.cnf
+systemctl restart mariadb
+
+echo "MariaDB root password: ${rootPassword}"
+echo "MariaDB installation complete"
+`;
+  }
+
+  generateRemoveScript(_config?: ServiceConfig): string {
+    return `#!/bin/bash
+set -e
+systemctl stop mariadb || true
+systemctl disable mariadb || true
+apt-get remove -y mariadb-server mariadb-client || true
+apt-get autoremove -y || true
+rm -rf /etc/mysql /var/lib/mysql /var/log/mysql
+userdel mysql 2>/dev/null || true
+`;
+  }
+
   private generatePassword(): string {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
     let password = "";
