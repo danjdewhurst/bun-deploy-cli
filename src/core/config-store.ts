@@ -1,15 +1,15 @@
 /**
  * Configuration Storage - Local JSON config management (~/.bun-deploy/)
  */
-import { mkdir, readFile, writeFile, readdir, stat, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import type { ServerConfig, AppConfig, GlobalConfig } from '../types/index.js';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import type { AppConfig, GlobalConfig, ServerConfig } from "../types/index.js";
 
-const CONFIG_DIR = join(homedir(), '.bun-deploy');
-const SERVERS_DIR = join(CONFIG_DIR, 'servers');
-const APPS_DIR = join(CONFIG_DIR, 'apps');
-const GLOBAL_CONFIG_FILE = join(CONFIG_DIR, 'config.json');
+const CONFIG_DIR = join(homedir(), ".bun-deploy");
+const SERVERS_DIR = join(CONFIG_DIR, "servers");
+const APPS_DIR = join(CONFIG_DIR, "apps");
+const GLOBAL_CONFIG_FILE = join(CONFIG_DIR, "config.json");
 
 async function ensureDir(path: string): Promise<void> {
   try {
@@ -21,7 +21,7 @@ async function ensureDir(path: string): Promise<void> {
 
 async function readJsonFile<T>(path: string): Promise<T | null> {
   try {
-    const content = await readFile(path, 'utf-8');
+    const content = await readFile(path, "utf-8");
     return JSON.parse(content) as T;
   } catch {
     return null;
@@ -30,12 +30,12 @@ async function readJsonFile<T>(path: string): Promise<T | null> {
 
 async function writeJsonFile<T>(path: string, data: T): Promise<void> {
   await ensureDir(dirname(path));
-  await writeFile(path, JSON.stringify(data, null, 2), 'utf-8');
+  await writeFile(path, JSON.stringify(data, null, 2), "utf-8");
 }
 
 function dirname(path: string): string {
-  const lastSlash = path.lastIndexOf('/');
-  return lastSlash === -1 ? '.' : path.slice(0, lastSlash);
+  const lastSlash = path.lastIndexOf("/");
+  return lastSlash === -1 ? "." : path.slice(0, lastSlash);
 }
 
 // Global Config
@@ -77,7 +77,7 @@ export async function listServers(): Promise<ServerConfig[]> {
   const servers: ServerConfig[] = [];
 
   for (const file of files) {
-    if (file.endsWith('.json')) {
+    if (file.endsWith(".json")) {
       const path = join(SERVERS_DIR, file);
       const server = await readJsonFile<ServerConfig>(path);
       if (server) {
@@ -127,7 +127,7 @@ export async function listApps(): Promise<AppConfig[]> {
   const apps: AppConfig[] = [];
 
   for (const file of files) {
-    if (file.endsWith('.json')) {
+    if (file.endsWith(".json")) {
       const path = join(APPS_DIR, file);
       const app = await readJsonFile<AppConfig>(path);
       if (app) {
@@ -141,7 +141,7 @@ export async function listApps(): Promise<AppConfig[]> {
 
 export async function listAppsByServer(serverName: string): Promise<AppConfig[]> {
   const apps = await listApps();
-  return apps.filter(app => app.serverName === serverName);
+  return apps.filter((app) => app.serverName === serverName);
 }
 
 export async function removeApp(name: string): Promise<boolean> {

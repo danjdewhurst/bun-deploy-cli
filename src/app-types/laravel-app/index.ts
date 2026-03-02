@@ -70,7 +70,8 @@ export class LaravelAppHandler implements AppTypeHandler {
     const appDir = `/var/www/${config.name}`;
     const useQueueWorker = config.envVars.QUEUE_CONNECTION !== "sync";
     const useScheduler = config.envVars.USE_SCHEDULER === "true";
-    const useHorizon = config.envVars.QUEUE_CONNECTION === "redis" && config.envVars.USE_HORIZON === "true";
+    const useHorizon =
+      config.envVars.QUEUE_CONNECTION === "redis" && config.envVars.USE_HORIZON === "true";
 
     return `#!/bin/bash
 set -e
@@ -144,7 +145,9 @@ php artisan optimize
 echo "Restarting PHP-FPM..."
 sudo systemctl restart php8.4-fpm
 
-${useQueueWorker ? `
+${
+  useQueueWorker
+    ? `
 # Restart queue workers
 echo "Restarting queue workers..."
 if systemctl is-active --quiet ${config.name}-horizon; then
@@ -152,13 +155,19 @@ if systemctl is-active --quiet ${config.name}-horizon; then
 elif systemctl is-active --quiet ${config.name}-queue; then
   sudo systemctl restart ${config.name}-queue
 fi
-` : ""}
+`
+    : ""
+}
 
-${useScheduler ? `
+${
+  useScheduler
+    ? `
 # Ensure scheduler is running
 echo "Ensuring scheduler is active..."
 sudo systemctl is-active --quiet ${config.name}-scheduler || sudo systemctl start ${config.name}-scheduler
-` : ""}
+`
+    : ""
+}
 
 echo "Deployment complete!"
 `;
@@ -242,7 +251,8 @@ echo "Deployment complete!"
     const appDir = `/var/www/${config.name}`;
     const useQueueWorker = config.envVars.QUEUE_CONNECTION !== "sync";
     const useScheduler = config.envVars.USE_SCHEDULER === "true";
-    const useHorizon = config.envVars.QUEUE_CONNECTION === "redis" && config.envVars.USE_HORIZON === "true";
+    const useHorizon =
+      config.envVars.QUEUE_CONNECTION === "redis" && config.envVars.USE_HORIZON === "true";
 
     // Main PHP-FPM service is managed by system, but we create queue workers
     let services = "";
@@ -341,7 +351,10 @@ WantedBy=multi-user.target
   getSetupCommands(config: AppConfig): string[] {
     const appDir = `/var/www/${config.name}`;
     const installMariaDB = config.envVars.INSTALL_MARIADB === "true";
-    const installRedis = config.envVars.INSTALL_REDIS === "true" || config.envVars.CACHE_STORE === "redis" || config.envVars.QUEUE_CONNECTION === "redis";
+    const installRedis =
+      config.envVars.INSTALL_REDIS === "true" ||
+      config.envVars.CACHE_STORE === "redis" ||
+      config.envVars.QUEUE_CONNECTION === "redis";
     const installNode = config.envVars.INSTALL_NODE !== "false"; // Default true
 
     const commands: string[] = [
@@ -357,13 +370,13 @@ WantedBy=multi-user.target
 
     // Install Composer if not present
     commands.push(
-      'if ! command -v composer &> /dev/null; then curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; fi',
+      "if ! command -v composer &> /dev/null; then curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer; fi",
     );
 
     // Install Node.js and npm if requested
     if (installNode) {
       commands.push(
-        'if ! command -v node &> /dev/null; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y -qq nodejs; fi',
+        "if ! command -v node &> /dev/null; then curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y -qq nodejs; fi",
       );
     }
 
@@ -377,7 +390,7 @@ WantedBy=multi-user.target
         "sudo mysql -e \"UPDATE mysql.global_priv SET priv=json_set(priv, '$.plugin', 'mysql_native_password', '$.authentication_string', PASSWORD('root')) WHERE User='root';\" 2>/dev/null || true",
         "sudo mysql -e \"DELETE FROM mysql.global_priv WHERE User='';\" 2>/dev/null || true",
         "sudo mysql -e \"DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');\" 2>/dev/null || true",
-        "sudo mysql -e \"DROP DATABASE IF EXISTS test;\" 2>/dev/null || true",
+        'sudo mysql -e "DROP DATABASE IF EXISTS test;" 2>/dev/null || true',
       );
 
       // Create database if specified

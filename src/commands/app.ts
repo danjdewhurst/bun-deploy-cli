@@ -1,18 +1,19 @@
 /**
  * App Commands - `bun-deploy app create|deploy|logs|env|remove`
  */
-import type { AppConfig, DeployResult } from "../types/index.js";
+
+import { getAppTypeHandler } from "../app-types/index.js";
 import {
-  saveApp,
-  getApp,
-  listApps,
-  removeApp,
   appExists,
+  getApp,
   getServer,
+  listApps,
   listAppsByServer,
+  removeApp,
+  saveApp,
 } from "../core/config-store.js";
 import { withServer } from "../core/ssh-client.js";
-import { getAppTypeHandler } from "../app-types/index.js";
+import type { AppConfig, DeployResult } from "../types/index.js";
 
 interface CreateAppOptions {
   server: string;
@@ -23,10 +24,7 @@ interface CreateAppOptions {
   port?: string;
 }
 
-export async function createApp(
-  name: string,
-  options: CreateAppOptions,
-): Promise<void> {
+export async function createApp(name: string, options: CreateAppOptions): Promise<void> {
   if (await appExists(name)) {
     console.error(`Error: App '${name}' already exists.`);
     process.exit(1);
@@ -177,10 +175,7 @@ export async function deployApp(name: string): Promise<void> {
       const envContent = Object.entries(app.envVars)
         .map(([key, value]) => `${key}=${value}`)
         .join("\n");
-      await client.uploadContent(
-        envContent,
-        `/tmp/${app.name}.env`,
-      );
+      await client.uploadContent(envContent, `/tmp/${app.name}.env`);
       await client.exec(
         `sudo mv /tmp/${app.name}.env ${appDir}/.env && sudo chown deploy:deploy ${appDir}/.env`,
       );
@@ -215,10 +210,7 @@ export async function deployApp(name: string): Promise<void> {
       // Step 6: Configure systemd service
       console.log("Configuring service...");
       const serviceFile = handler.generateSystemdService(app);
-      await client.uploadContent(
-        serviceFile,
-        `/tmp/${app.name}.service`,
-      );
+      await client.uploadContent(serviceFile, `/tmp/${app.name}.service`);
       await client.exec(
         `sudo mv /tmp/${app.name}.service /etc/systemd/system/bun-deploy-${app.name}.service`,
       );
@@ -229,13 +221,8 @@ export async function deployApp(name: string): Promise<void> {
       // Step 7: Configure Nginx
       console.log("Configuring Nginx...");
       const nginxConfig = handler.generateNginxConfig(app);
-      await client.uploadContent(
-        nginxConfig,
-        `/tmp/${app.name}.nginx`,
-      );
-      await client.exec(
-        `sudo mv /tmp/${app.name}.nginx /etc/nginx/sites-available/${app.name}`,
-      );
+      await client.uploadContent(nginxConfig, `/tmp/${app.name}.nginx`);
+      await client.exec(`sudo mv /tmp/${app.name}.nginx /etc/nginx/sites-available/${app.name}`);
       await client.exec(
         `sudo ln -sf /etc/nginx/sites-available/${app.name} /etc/nginx/sites-enabled/`,
       );
@@ -279,11 +266,11 @@ export async function deployApp(name: string): Promise<void> {
     if (result.commit) {
       console.log(`Commit: ${result.commit}`);
     }
-    console.log(`App is running at: http://${app.domain || server.host}:${app.port === 80 ? "" : app.port}`);
-  } catch (error) {
-    console.error(
-      `\nDeployment failed: ${error instanceof Error ? error.message : String(error)}`,
+    console.log(
+      `App is running at: http://${app.domain || server.host}:${app.port === 80 ? "" : app.port}`,
     );
+  } catch (error) {
+    console.error(`\nDeployment failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
@@ -314,7 +301,12 @@ export async function removeAppCommand(name: string, force = false): Promise<voi
   }
 }
 
-export async function manageEnv(name: string, action?: string, key?: string, value?: string): Promise<void> {
+export async function manageEnv(
+  name: string,
+  action?: string,
+  key?: string,
+  value?: string,
+): Promise<void> {
   const app = await getApp(name);
 
   if (!app) {
@@ -388,11 +380,15 @@ export async function streamLogs(name: string, follow = false): Promise<void> {
 
   try {
     await withServer(server, async (client) => {
-      console.log(follow ? `Streaming logs for '${name}' (Ctrl+C to stop)...\n` : `Logs for '${name}':\n`);
+      console.log(
+        follow ? `Streaming logs for '${name}' (Ctrl+C to stop)...\n` : `Logs for '${name}':\n`,
+      );
       await client.streamLogs(serviceName, follow);
     });
   } catch (error) {
-    console.error(`Failed to fetch logs: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Failed to fetch logs: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   }
 }

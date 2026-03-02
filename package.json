@@ -8,13 +8,19 @@
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
   },
   "dependencies": {
     "commander": "^12.0.0",
     "ssh2": "^1.16.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.5",
     "@types/bun": "latest",
     "@types/ssh2": "^1.15.0",
     "typescript": "^5"

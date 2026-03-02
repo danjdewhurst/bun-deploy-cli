@@ -1,7 +1,7 @@
 /**
  * Config Commands - `bun-deploy config get|set`
  */
-import { getConfigValue, setConfigValue, getGlobalConfig } from "../core/config-store.js";
+import { getConfigValue, getGlobalConfig, setConfigValue } from "../core/config-store.js";
 
 export async function getConfig(key: string): Promise<void> {
   const value = await getConfigValue(key);

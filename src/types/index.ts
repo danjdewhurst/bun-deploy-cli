@@ -2,7 +2,7 @@
  * Bun Deploy CLI - Shared TypeScript Interfaces
  */
 
-export type ServerState = 'unprovisioned' | 'provisioning' | 'ready' | 'error';
+export type ServerState = "unprovisioned" | "provisioning" | "ready" | "error";
 
 export interface ServerConfig {
   name: string;

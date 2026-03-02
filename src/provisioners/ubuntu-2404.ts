@@ -1,9 +1,10 @@
 /**
  * Ubuntu 24.04 Provisioner - Automated server setup
  */
-import type { ServerConfig } from "../types/index.js";
-import { SSHClient, withServer } from "../core/ssh-client.js";
+
 import { saveServer } from "../core/config-store.js";
+import { type SSHClient, withServer } from "../core/ssh-client.js";
+import type { ServerConfig } from "../types/index.js";
 
 const SETUP_SCRIPT = `#!/bin/bash
 set -e
@@ -103,9 +104,7 @@ echo "  - Nginx $(nginx -v 2>&1 | head -1)"
 echo "  - Deploy user"
 `;
 
-export async function provisionUbuntu2404(
-  server: ServerConfig,
-): Promise<void> {
+export async function provisionUbuntu2404(server: ServerConfig): Promise<void> {
   await withServer(server, async (client: SSHClient) => {
     // Update server state to provisioning
     server.state = "provisioning";

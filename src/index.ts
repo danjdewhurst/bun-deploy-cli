@@ -4,20 +4,20 @@
  */
 import { Command } from "commander";
 import {
+  createApp,
+  deployApp,
+  listAppsCommand,
+  manageEnv,
+  removeAppCommand,
+  streamLogs,
+} from "./commands/app.js";
+import {
   addServer,
   listServersCommand,
   removeServerCommand,
   setupServer,
   testConnection,
 } from "./commands/server.js";
-import {
-  createApp,
-  listAppsCommand,
-  deployApp,
-  removeAppCommand,
-  manageEnv,
-  streamLogs,
-} from "./commands/app.js";
 import { getConfigValue, setConfigValue } from "./core/config-store.js";
 
 const program = new Command();
@@ -28,9 +28,7 @@ program
   .version("0.1.0");
 
 // Server commands
-const serverCmd = program
-  .command("server")
-  .description("Manage servers");
+const serverCmd = program.command("server").description("Manage servers");
 
 serverCmd
   .command("add <name>")
@@ -65,8 +63,8 @@ serverCmd
   .option("--force", "Re-run provisioning even if server is already ready")
   .action(async (name, options) => {
     // Pass force flag via argv for now
-    if (options.force && !process.argv.includes('--force')) {
-      process.argv.push('--force');
+    if (options.force && !process.argv.includes("--force")) {
+      process.argv.push("--force");
     }
     await setupServer(name);
   });
@@ -79,9 +77,7 @@ serverCmd
   });
 
 // App commands
-const appCmd = program
-  .command("app")
-  .description("Manage applications");
+const appCmd = program.command("app").description("Manage applications");
 
 appCmd
   .command("create <name>")
@@ -134,9 +130,7 @@ appCmd
   });
 
 // Config commands
-const configCmd = program
-  .command("config")
-  .description("Manage global configuration");
+const configCmd = program.command("config").description("Manage global configuration");
 
 configCmd
   .command("get <key>")

@@ -1,11 +1,12 @@
 /**
  * SSH Client Wrapper - SSH connection and command execution
  */
-import { Client } from 'ssh2';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import type { ServerConfig, SSHExecResult } from '../types/index.js';
+
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { Client } from "ssh2";
+import type { ServerConfig, SSHExecResult } from "../types/index.js";
 
 export class SSHClient {
   private client: Client;
@@ -27,7 +28,7 @@ export class SSHClient {
       };
 
       if (sshKeyPath) {
-        const keyPath = sshKeyPath.startsWith('~/')
+        const keyPath = sshKeyPath.startsWith("~/")
           ? join(homedir(), sshKeyPath.slice(2))
           : sshKeyPath;
         connectConfig.privateKey = readFile(keyPath);
@@ -37,11 +38,11 @@ export class SSHClient {
       }
 
       this.client
-        .on('ready', () => {
+        .on("ready", () => {
           this.connected = true;
           resolve();
         })
-        .on('error', (err) => {
+        .on("error", (err) => {
           reject(err);
         })
         .connect(connectConfig);
@@ -50,7 +51,7 @@ export class SSHClient {
 
   async exec(command: string): Promise<SSHExecResult> {
     if (!this.connected) {
-      throw new Error('SSH client not connected. Call connect() first.');
+      throw new Error("SSH client not connected. Call connect() first.");
     }
 
     return new Promise((resolve, reject) => {
@@ -60,19 +61,19 @@ export class SSHClient {
           return;
         }
 
-        let stdout = '';
-        let stderr = '';
+        let stdout = "";
+        let stderr = "";
         let code: number | null = null;
 
         stream
-          .on('close', (exitCode: number) => {
+          .on("close", (exitCode: number) => {
             code = exitCode ?? 0;
             resolve({ stdout, stderr, code });
           })
-          .on('data', (data: Buffer) => {
+          .on("data", (data: Buffer) => {
             stdout += data.toString();
           })
-          .stderr.on('data', (data: Buffer) => {
+          .stderr.on("data", (data: Buffer) => {
             stderr += data.toString();
           });
       });
@@ -81,15 +82,13 @@ export class SSHClient {
 
   async execWithSudo(command: string, password?: string): Promise<SSHExecResult> {
     // Use sudo with non-interactive flag or provide password if needed
-    const sudoCommand = password
-      ? `echo '${password}' | sudo -S ${command}`
-      : `sudo -n ${command}`;
+    const sudoCommand = password ? `echo '${password}' | sudo -S ${command}` : `sudo -n ${command}`;
     return this.exec(sudoCommand);
   }
 
   async uploadFile(localPath: string, remotePath: string): Promise<void> {
     if (!this.connected) {
-      throw new Error('SSH client not connected. Call connect() first.');
+      throw new Error("SSH client not connected. Call connect() first.");
     }
 
     const content = await readFile(localPath);
@@ -114,10 +113,10 @@ export class SSHClient {
 
   async uploadContent(content: string | Buffer, remotePath: string): Promise<void> {
     if (!this.connected) {
-      throw new Error('SSH client not connected. Call connect() first.');
+      throw new Error("SSH client not connected. Call connect() first.");
     }
 
-    const buffer = typeof content === 'string' ? Buffer.from(content) : content;
+    const buffer = typeof content === "string" ? Buffer.from(content) : content;
 
     return new Promise((resolve, reject) => {
       this.client.sftp((err, sftp) => {
@@ -139,10 +138,10 @@ export class SSHClient {
 
   async downloadFile(remotePath: string, localPath: string): Promise<void> {
     if (!this.connected) {
-      throw new Error('SSH client not connected. Call connect() first.');
+      throw new Error("SSH client not connected. Call connect() first.");
     }
 
-    const { writeFile } = await import('node:fs/promises');
+    const { writeFile } = await import("node:fs/promises");
 
     return new Promise((resolve, reject) => {
       this.client.sftp((err, sftp) => {
@@ -174,7 +173,7 @@ export class SSHClient {
     await this.uploadContent(scriptContent, remoteScriptPath);
 
     // Make it executable and run it
-    const execCommand = `chmod +x ${remoteScriptPath} && ${cwd ? `cd ${cwd} && ` : ''}${remoteScriptPath}; rm -f ${remoteScriptPath}`;
+    const execCommand = `chmod +x ${remoteScriptPath} && ${cwd ? `cd ${cwd} && ` : ""}${remoteScriptPath}; rm -f ${remoteScriptPath}`;
     const command = sudo ? `sudo bash -c '${execCommand}'` : execCommand;
 
     return this.exec(command);
@@ -182,7 +181,7 @@ export class SSHClient {
 
   async streamLogs(serviceName: string, follow = false): Promise<void> {
     if (!this.connected) {
-      throw new Error('SSH client not connected. Call connect() first.');
+      throw new Error("SSH client not connected. Call connect() first.");
     }
 
     const command = follow
@@ -197,13 +196,13 @@ export class SSHClient {
         }
 
         stream
-          .on('close', () => {
+          .on("close", () => {
             resolve();
           })
-          .on('data', (data: Buffer) => {
+          .on("data", (data: Buffer) => {
             process.stdout.write(data.toString());
           })
-          .stderr.on('data', (data: Buffer) => {
+          .stderr.on("data", (data: Buffer) => {
             process.stderr.write(data.toString());
           });
       });
@@ -227,7 +226,7 @@ export class SSHClient {
  */
 export async function withServer<T>(
   serverConfig: ServerConfig,
-  callback: (client: SSHClient) => Promise<T>
+  callback: (client: SSHClient) => Promise<T>,
 ): Promise<T> {
   const client = new SSHClient(serverConfig);
 
