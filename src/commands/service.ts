@@ -327,6 +327,10 @@ function generateInstallScript(
 
   // Generate the install script based on the service type
   switch (handler.name) {
+    case "bun":
+      return generateBunInstallScript(config);
+    case "caddy":
+      return generateCaddyInstallScript(config);
     case "redis":
       return generateRedisInstallScript(config);
     case "mariadb":
@@ -338,6 +342,81 @@ function generateInstallScript(
     default:
       throw new Error(`Unknown service: ${handler.name}`);
   }
+}
+
+function generateBunInstallScript(_config: ServiceConfig): string {
+  return `#!/bin/bash
+set -e
+
+echo "Installing Bun..."
+
+# Install Bun
+export BUN_INSTALL=/usr/local
+curl -fsSL https://bun.sh/install | bash
+
+# Ensure bun is in PATH
+ln -sf /usr/local/bin/bun /usr/local/bin/bun 2>/dev/null || true
+
+# Verify installation
+if /usr/local/bin/bun --version; then
+    echo "Bun installed successfully"
+else
+    echo "Bun installation may have failed"
+    exit 1
+fi
+
+echo "Bun installation complete"
+`;
+}
+
+function generateCaddyInstallScript(config: ServiceConfig): string {
+  const port = config.port ?? 80;
+
+  return `#!/bin/bash
+set -e
+
+echo "Installing Caddy..."
+
+# Install dependencies
+apt-get update -qq
+apt-get install -y -qq debian-keyring debian-archive-keyring apt-transport-https
+
+# Add Caddy's official repository
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+
+# Install Caddy
+apt-get update -qq
+apt-get install -y -qq caddy
+
+# Create Caddy user if not exists
+if ! id "caddy" &>/dev/null; then
+    useradd --system --home /var/lib/caddy --shell /usr/sbin/nologin caddy
+fi
+
+# Set up Caddy directories
+mkdir -p /etc/caddy/sites
+mkdir -p /var/lib/caddy
+mkdir -p /var/log/caddy
+chown -R caddy:caddy /var/lib/caddy /var/log/caddy
+
+# Create main Caddyfile
+cat > /etc/caddy/Caddyfile << 'EOF'
+# Main Caddyfile - imports all site configurations
+import /etc/caddy/sites/*.Caddyfile
+EOF
+
+chown caddy:caddy /etc/caddy/Caddyfile
+
+# Allow deploy user to reload Caddy
+echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/caddy" > /etc/sudoers.d/bun-deploy-caddy
+
+systemctl daemon-reload
+systemctl enable caddy
+systemctl start caddy
+
+echo "Caddy installed and running on port ${port}"
+`;
 }
 
 function generateRedisInstallScript(config: ServiceConfig): string {
@@ -535,6 +614,28 @@ function generateRemoveScript(
   if (!handler) throw new Error("Handler is required");
 
   switch (handler.name) {
+    case "bun":
+      return `#!/bin/bash
+set -e
+rm -f /usr/local/bin/bun
+rm -rf /usr/local/bin/bun /usr/local/bun
+rm -rf ~/.bun
+`;
+
+    case "caddy":
+      return `#!/bin/bash
+set -e
+systemctl stop caddy || true
+systemctl disable caddy || true
+apt-get remove -y caddy || true
+apt-get autoremove -y || true
+rm -rf /etc/caddy /var/lib/caddy /var/log/caddy
+rm -f /etc/apt/sources.list.d/caddy-stable.list
+rm -f /etc/sudoers.d/bun-deploy-caddy
+userdel caddy 2>/dev/null || true
+systemctl daemon-reload
+`;
+
     case "redis":
       return `#!/bin/bash
 set -e
