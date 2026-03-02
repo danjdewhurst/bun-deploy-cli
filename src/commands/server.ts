@@ -159,7 +159,7 @@ export async function setupServer(name: string): Promise<void> {
   console.log("  - System updates and essential packages");
   console.log("  - Security hardening (ufw, fail2ban)");
   console.log("  - Bun.js runtime");
-  console.log("  - Nginx web server");
+  console.log("  - Caddy web server");
   console.log("  - Deploy user and directory structure");
   console.log();
 

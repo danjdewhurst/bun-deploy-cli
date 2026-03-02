@@ -45,8 +45,8 @@ export interface AppTypeHandler {
   /** Generate server-side deployment script */
   generateDeployScript(config: AppConfig): string;
 
-  /** Generate Nginx configuration for this app */
-  generateNginxConfig(config: AppConfig): string;
+  /** Generate web server configuration (Caddy) for this app */
+  generateWebConfig(config: AppConfig): string;
 
   /** Generate systemd service file */
   generateSystemdService(config: AppConfig): string;

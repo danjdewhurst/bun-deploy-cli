@@ -62,38 +62,33 @@ describe("BunAppHandler", () => {
     });
   });
 
-  describe("generateNginxConfig", () => {
-    test("generates nginx config", () => {
-      const config = handler.generateNginxConfig(baseConfig);
-      expect(config).toContain("server {");
-      expect(config).toContain("listen 80");
+  describe("generateWebConfig", () => {
+    test("generates Caddy config", () => {
+      const config = handler.generateWebConfig(baseConfig);
+      expect(config).toContain("example.com {");
+      expect(config).toContain("reverse_proxy localhost:3000");
     });
 
-    test("includes server name", () => {
-      const config = handler.generateNginxConfig(baseConfig);
-      expect(config).toContain("server_name example.com");
-    });
-
-    test("uses default server name when no domain", () => {
+    test("uses port 80 when no domain", () => {
       const appConfig = { ...baseConfig, domain: undefined };
-      const config = handler.generateNginxConfig(appConfig);
-      expect(config).toContain("server_name _");
-    });
-
-    test("includes proxy pass to correct port", () => {
-      const config = handler.generateNginxConfig(baseConfig);
-      expect(config).toContain("proxy_pass http://127.0.0.1:3000");
-    });
-
-    test("includes websocket headers", () => {
-      const config = handler.generateNginxConfig(baseConfig);
-      expect(config).toContain("proxy_set_header Upgrade $http_upgrade");
-      expect(config).toContain("proxy_set_header Connection");
+      const config = handler.generateWebConfig(appConfig);
+      expect(config).toContain(":80 {");
     });
 
     test("includes health check endpoint", () => {
-      const config = handler.generateNginxConfig(baseConfig);
-      expect(config).toContain("location /health");
+      const config = handler.generateWebConfig(baseConfig);
+      expect(config).toContain("respond /health");
+    });
+
+    test("includes security headers", () => {
+      const config = handler.generateWebConfig(baseConfig);
+      expect(config).toContain("X-Frame-Options");
+      expect(config).toContain("X-Content-Type-Options");
+    });
+
+    test("includes static file handling", () => {
+      const config = handler.generateWebConfig(baseConfig);
+      expect(config).toContain("handle_path /static/*");
     });
   });
 

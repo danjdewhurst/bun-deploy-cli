@@ -259,22 +259,28 @@ export async function deployApp(name: string): Promise<void> {
       await client.exec(`sudo systemctl enable ${shellEscape(`bun-deploy-${app.name}`)}`);
       await client.exec(`sudo systemctl restart ${shellEscape(`bun-deploy-${app.name}`)}`);
 
-      // Step 7: Configure Nginx
-      console.log("Configuring Nginx...");
-      const nginxConfig = handler.generateNginxConfig(app);
-      const tmpNginxPath = `/tmp/${app.name}.nginx`;
-      const sitesAvailablePath = `/etc/nginx/sites-available/${app.name}`;
-      await client.uploadContent(nginxConfig, tmpNginxPath);
-      await client.exec(`sudo mv ${shellEscape(tmpNginxPath)} ${shellEscape(sitesAvailablePath)}`);
-      await client.exec(`sudo ln -sf ${shellEscape(sitesAvailablePath)} /etc/nginx/sites-enabled/`);
+      // Step 7: Configure Caddy
+      console.log("Configuring Caddy...");
+      const webConfig = handler.generateWebConfig(app);
+      const tmpCaddyPath = `/tmp/${app.name}.caddy`;
+      const caddyConfigPath = `/etc/caddy/sites/${app.name}.Caddyfile`;
+      await client.uploadContent(webConfig, tmpCaddyPath);
+      await client.exec(`sudo mkdir -p /etc/caddy/sites`);
+      await client.exec(`sudo mv ${shellEscape(tmpCaddyPath)} ${shellEscape(caddyConfigPath)}`);
 
-      // Test Nginx config
-      const nginxTest = await client.exec("sudo nginx -t");
-      if (nginxTest.code !== 0) {
-        throw new Error(`Nginx configuration test failed: ${nginxTest.stderr}`);
+      // Rebuild main Caddyfile with import for all sites
+      const importConfig = `import /etc/caddy/sites/*.Caddyfile\n`;
+      const mainCaddyfile = `/etc/caddy/Caddyfile`;
+      await client.uploadContent(importConfig, tmpCaddyPath);
+      await client.exec(`sudo mv ${shellEscape(tmpCaddyPath)} ${shellEscape(mainCaddyfile)}`);
+
+      // Validate and reload Caddy
+      const caddyTest = await client.exec("sudo caddy validate --config /etc/caddy/Caddyfile");
+      if (caddyTest.code !== 0) {
+        throw new Error(`Caddy configuration test failed: ${caddyTest.stderr}`);
       }
 
-      await client.exec("sudo systemctl reload nginx");
+      await client.exec("sudo systemctl reload caddy");
 
       // Step 8: Health check with retry logic
       console.log("Running health check...");

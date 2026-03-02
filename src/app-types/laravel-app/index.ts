@@ -174,75 +174,52 @@ echo "Deployment complete!"
 `;
   }
 
-  generateNginxConfig(config: AppConfig): string {
-    const serverName = config.domain || "_";
-    const phpVersion = "8.4";
+  generateWebConfig(config: AppConfig): string {
+    const domain = config.domain || ":80";
+    const appDir = `/var/www/${config.name}`;
 
-    return `server {
-    listen ${config.port || 80};
-    listen [::]:${config.port || 80};
-    server_name ${serverName};
-    root /var/www/${config.name}/public;
+    return `${domain} {
+    root * ${appDir}/public
+
+    # PHP-FPM via FastCGI
+    php_fastcgi unix//run/php/php8.4-fpm.sock
+
+    # Laravel routing (fallback to index.php)
+    try_files {path} {path}/ /index.php?{query}
+
+    # Static file handling with caching
+    handle *.js *.css *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot {
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+
+    # Security: deny access to hidden files (except .well-known)
+    @hidden {
+        path_regexp ^/(\\.|.*\\.)
+        not path_regexp ^/.well-known
+    }
+    respond @hidden 404
+
+    # Security: deny access to sensitive Laravel files
+    @sensitive {
+        path_regexp ^/(\\.env|composer\\.(json|lock)|package\\.json|webpack\\.mix\\.js)
+    }
+    respond @sensitive 404
 
     # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    header {
+        X-Frame-Options SAMEORIGIN
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+    }
 
-    # Index files
-    index index.php index.html;
-
-    # Charset
-    charset utf-8;
+    # Health check endpoint (bypasses Laravel)
+    respond /health/caddy "caddy healthy\\n" 200
 
     # Logging
-    access_log /var/log/nginx/${config.name}-access.log;
-    error_log /var/log/nginx/${config.name}-error.log;
-
-    # Laravel location block
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
-    }
-
-    # PHP-FPM configuration
-    location ~ \\.php$ {
-        fastcgi_pass unix:/var/run/php/php${phpVersion}-fpm.sock;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-
-        # Performance tuning
-        fastcgi_buffer_size 128k;
-        fastcgi_buffers 4 256k;
-        fastcgi_busy_buffers_size 256k;
-        fastcgi_connect_timeout 60s;
-        fastcgi_send_timeout 60s;
-        fastcgi_read_timeout 60s;
-    }
-
-    # Deny access to hidden files
-    location ~ /\\.(?!well-known).* {
-        deny all;
-    }
-
-    # Deny access to sensitive Laravel files
-    location ~ ^/(?:\\.env|composer\\.(json|lock)|package\\.json|webpack\\.mix\\.js) {
-        deny all;
-    }
-
-    # Static file caching
-    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-
-    # Health check endpoint (bypasses Laravel for lightweight check)
-    location /health/nginx {
-        access_log off;
-        return 200 "nginx healthy\\n";
-        add_header Content-Type text/plain;
+    log {
+        output file /var/log/caddy/${config.name}.access.log
     }
 }
 `;

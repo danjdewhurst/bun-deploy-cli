@@ -19,7 +19,14 @@ apt-get upgrade -y -qq
 
 # Install essential packages
 echo "Installing essential packages..."
-apt-get install -y -qq curl git ufw fail2ban htop jq build-essential nginx
+apt-get install -y -qq curl git ufw fail2ban htop jq build-essential debian-keyring debian-archive-keyring apt-transport-https
+
+# Install Caddy
+echo "Installing Caddy..."
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -qq
+apt-get install -y -qq caddy
 
 # Configure UFW firewall
 echo "Configuring firewall..."
@@ -54,7 +61,7 @@ if ! id "deploy" &> /dev/null; then
   useradd -m -s /bin/bash -G sudo deploy
   # Allow deploy user to use sudo without password for specific commands
   echo "deploy ALL=(ALL) NOPASSWD: /bin/systemctl * bun-deploy-*" > /etc/sudoers.d/bun-deploy
-  echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/nginx" >> /etc/sudoers.d/bun-deploy
+  echo "deploy ALL=(ALL) NOPASSWD: /usr/bin/caddy" >> /etc/sudoers.d/bun-deploy
 fi
 
 # Set up /var/www directory
@@ -81,14 +88,14 @@ cat > /etc/logrotate.d/bun-deploy <> 'EOF'
   create 0644 deploy deploy
   sharedscripts
   postrotate
-    systemctl reload nginx > /dev/null 2>&1 || true
+    caddy reload --config /etc/caddy/Caddyfile > /dev/null 2>&1 || true
   endscript
 }
 EOF
 
-# Configure nginx
-systemctl enable nginx
-systemctl start nginx
+# Configure Caddy
+systemctl enable caddy
+systemctl start caddy
 
 # Create logs directory template
 mkdir -p /var/log/bun-deploy
@@ -100,7 +107,7 @@ echo "  - System updates"
 echo "  - UFW firewall"
 echo "  - Fail2ban"
 echo "  - Bun $(bun --version)"
-echo "  - Nginx $(nginx -v 2>&1 | head -1)"
+echo "  - Caddy $(caddy version | head -1)"
 echo "  - Deploy user"
 `;
 
@@ -119,7 +126,7 @@ export async function provisionUbuntu2404(server: ServerConfig): Promise<void> {
       await client.uploadContent(SETUP_SCRIPT, remoteScriptPath);
 
       console.log("Running setup script (this may take a few minutes)...");
-      console.log("  Installing system packages, Bun, Nginx, and security tools...");
+      console.log("  Installing system packages, Bun, Caddy, and security tools...");
 
       const result = await client.exec(`bash ${remoteScriptPath}`);
 
@@ -135,17 +142,17 @@ export async function provisionUbuntu2404(server: ServerConfig): Promise<void> {
       // Verify installation
       console.log("\nVerifying installation...");
       const bunVersion = await client.exec("bun --version");
-      const nginxVersion = await client.exec("nginx -v 2>&1");
+      const caddyVersion = await client.exec("caddy version");
       const ufwStatus = await client.exec("ufw status | head -1");
 
       console.log(`Bun version: ${bunVersion.stdout.trim()}`);
-      console.log(`Nginx: ${nginxVersion.stderr.trim() || nginxVersion.stdout.trim()}`);
+      console.log(`Caddy: ${caddyVersion.stdout.trim()}`);
       console.log(`Firewall: ${ufwStatus.stdout.trim()}`);
 
       // Update server state to ready
       server.state = "ready";
       server.provisionedAt = new Date().toISOString();
-      server.installedApps = ["bun", "nginx", "ufw", "fail2ban"];
+      server.installedApps = ["bun", "caddy", "ufw", "fail2ban"];
       await saveServer(server);
     } catch (error) {
       // Update server state to error

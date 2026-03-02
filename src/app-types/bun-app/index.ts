@@ -49,37 +49,32 @@ echo "Deployment script complete."
 `;
   }
 
-  generateNginxConfig(config: AppConfig): string {
-    const serverName = config.domain || "_";
+  generateWebConfig(config: AppConfig): string {
+    const domain = config.domain || ":80";
+    const appDir = `/var/www/${config.name}`;
 
-    return `server {
-    listen 80;
-    server_name ${serverName};
-
-    location / {
-        proxy_pass http://127.0.0.1:${config.port};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
+    return `${domain} {
+    reverse_proxy localhost:${config.port}
 
     # Static files (if public directory exists)
-    location /static {
-        alias ${`/var/www/${config.name}/public`};
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+    handle_path /static/* {
+        root * ${appDir}/public
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
     }
 
     # Health check endpoint
-    location /health {
-        access_log off;
-        return 200 "healthy\\n";
-        add_header Content-Type text/plain;
+    respond /health "healthy\n" 200
+
+    # Security headers
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/${config.name}.access.log
     }
 }
 `;
