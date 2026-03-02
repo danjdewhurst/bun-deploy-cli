@@ -194,19 +194,6 @@ bun-deploy provider sync hetzner --prefix my-project-
 bun-deploy provider delete hetzner my-server --force
 ```
 
-### Hetzner Cloud (Backward Compatible)
-
-The `hcloud` commands remain as aliases to the provider system:
-
-```bash
-bun-deploy hcloud status      # Same as: provider status
-bun-deploy hcloud setup       # Same as: provider configure hetzner
-bun-deploy hcloud list        # Same as: provider list hetzner
-bun-deploy hcloud create      # Same as: provider create hetzner
-bun-deploy hcloud sync        # Same as: provider sync hetzner
-bun-deploy hcloud delete      # Same as: provider delete hetzner
-```
-
 ## Adding New Cloud Providers
 
 To add support for a new cloud provider (e.g., AWS, DigitalOcean, Linode):

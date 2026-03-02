@@ -150,61 +150,6 @@ providerCmd
     await syncProviderServers(provider, options.prefix);
   });
 
-// Hetzner Cloud commands - backward compatibility, delegates to provider
-const hcloudCmd = program
-  .command("hcloud")
-  .description("Manage Hetzner Cloud servers (alias for 'provider' with hetzner)");
-
-hcloudCmd
-  .command("status")
-  .description("Check hcloud CLI installation and configuration")
-  .action(async () => {
-    await providerStatus();
-  });
-
-hcloudCmd
-  .command("setup")
-  .description("Configure hcloud CLI with your API token")
-  .requiredOption("--token <token>", "Hetzner Cloud API token")
-  .action(async (options) => {
-    await configureProvider("hetzner", { token: options.token });
-  });
-
-hcloudCmd
-  .command("list")
-  .description("List Hetzner Cloud servers")
-  .action(async () => {
-    await listProviderServers("hetzner");
-  });
-
-hcloudCmd
-  .command("create <name>")
-  .description("Create a new Hetzner Cloud server")
-  .option("--type <type>", "Server type (e.g., cx22, cx32, cpx11)", "cx22")
-  .option("--location <location>", "Datacenter location (e.g., nbg1, fsn1, hel1)", "nbg1")
-  .option("--image <image>", "OS image (e.g., ubuntu-24.04, debian-12)", "ubuntu-24.04")
-  .option("--ssh-key <name>", "SSH key name to add to the server")
-  .option("--label <label>", "Labels to add (can be used multiple times)", collect, [])
-  .action(async (name, options) => {
-    await createProviderServer("hetzner", name, options);
-  });
-
-hcloudCmd
-  .command("delete <name>")
-  .description("Delete a Hetzner Cloud server")
-  .option("--force", "Skip confirmation prompt")
-  .action(async (name, options) => {
-    await deleteProviderServer("hetzner", name, options.force);
-  });
-
-hcloudCmd
-  .command("sync")
-  .description("Sync Hetzner Cloud servers to local configuration")
-  .option("--prefix <prefix>", "Only sync servers with names starting with this prefix")
-  .action(async (options) => {
-    await syncProviderServers("hetzner", options.prefix);
-  });
-
 // App commands
 const appCmd = program.command("app").description("Manage applications");
 
