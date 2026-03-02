@@ -35,8 +35,6 @@ export type LaravelEnvVars = {
   QUEUE_NAME?: string;
   USE_HORIZON?: string;
   USE_SCHEDULER?: string;
-  INSTALL_MARIADB?: string;
-  INSTALL_REDIS?: string;
   INSTALL_NODE?: string;
   [key: string]: string | undefined;
 };
@@ -44,6 +42,7 @@ export type LaravelEnvVars = {
 export class LaravelAppHandler implements AppTypeHandler {
   readonly name = "laravel-app";
   readonly description = "Laravel 12 application with PHP 8.4, queues, scheduler, and Redis";
+  readonly requiredServices = ["mariadb", "redis"];
 
   async validate(config: AppConfig): Promise<boolean> {
     const env = config.envVars as LaravelEnvVars;
@@ -328,11 +327,6 @@ WantedBy=multi-user.target
 
   getSetupCommands(config: AppConfig): string[] {
     const appDir = `/var/www/${config.name}`;
-    const installMariaDB = config.envVars.INSTALL_MARIADB === "true";
-    const installRedis =
-      config.envVars.INSTALL_REDIS === "true" ||
-      config.envVars.CACHE_STORE === "redis" ||
-      config.envVars.QUEUE_CONNECTION === "redis";
     const installNode = config.envVars.INSTALL_NODE !== "false"; // Default true
 
     const commands: string[] = [
@@ -358,44 +352,21 @@ WantedBy=multi-user.target
       );
     }
 
-    // Install MariaDB if requested
-    if (installMariaDB) {
-      commands.push(
-        "sudo apt-get install -y -qq mariadb-server",
-        "sudo systemctl enable mariadb",
-        "sudo systemctl start mariadb",
-        // Secure installation with default settings
-        "sudo mysql -e \"UPDATE mysql.global_priv SET priv=json_set(priv, '$.plugin', 'mysql_native_password', '$.authentication_string', PASSWORD('root')) WHERE User='root';\" 2>/dev/null || true",
-        "sudo mysql -e \"DELETE FROM mysql.global_priv WHERE User='';\" 2>/dev/null || true",
-        "sudo mysql -e \"DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');\" 2>/dev/null || true",
-        'sudo mysql -e "DROP DATABASE IF EXISTS test;" 2>/dev/null || true',
-      );
+    // Create database and user (MariaDB is pre-installed via services system)
+    const dbName = config.envVars.DB_DATABASE || config.name.replace(/[^a-zA-Z0-9_]/g, "_");
+    const dbUser = config.envVars.DB_USERNAME || config.name.replace(/[^a-zA-Z0-9_]/g, "_");
+    const dbPass = config.envVars.DB_PASSWORD || this.generateRandomPassword();
 
-      // Create database if specified
-      const dbName = config.envVars.DB_DATABASE || config.name.replace(/[^a-zA-Z0-9_]/g, "_");
-      const dbUser = config.envVars.DB_USERNAME || config.name.replace(/[^a-zA-Z0-9_]/g, "_");
-      const dbPass = config.envVars.DB_PASSWORD || this.generateRandomPassword();
+    // Escape password for shell (single quote handling)
+    const escapedPass = dbPass.replace(/'/g, "'\\''");
 
-      // Escape password for shell (single quote handling)
-      const escapedPass = dbPass.replace(/'/g, "'\\''");
-
-      commands.push(
-        `sudo mysql -e "CREATE DATABASE IF NOT EXISTS \`${dbName}\`;"`,
-        `sudo mysql -e "CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${escapedPass}';"`,
-        `sudo mysql -e "GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${dbUser}'@'localhost';"`,
-        `sudo mysql -e "FLUSH PRIVILEGES;"`,
-        `echo "Database credentials - Name: ${dbName}, User: ${dbUser}"`,
-      );
-    }
-
-    // Install Redis if requested
-    if (installRedis) {
-      commands.push(
-        "sudo apt-get install -y -qq redis-server",
-        "sudo systemctl enable redis-server",
-        "sudo systemctl start redis-server",
-      );
-    }
+    commands.push(
+      `sudo mysql -e "CREATE DATABASE IF NOT EXISTS \`${dbName}\`;"`,
+      `sudo mysql -e "CREATE USER IF NOT EXISTS '${dbUser}'@'localhost' IDENTIFIED BY '${escapedPass}';"`,
+      `sudo mysql -e "GRANT ALL PRIVILEGES ON \`${dbName}\`.* TO '${dbUser}'@'localhost';"`,
+      `sudo mysql -e "FLUSH PRIVILEGES;"`,
+      `echo "Database credentials - Name: ${dbName}, User: ${dbUser}, Password: ${dbPass}"`,
+    );
 
     // Configure PHP-FPM for deploy user
     commands.push(

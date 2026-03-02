@@ -40,6 +40,9 @@ export interface AppTypeHandler {
   readonly name: string;
   readonly description: string;
 
+  /** Services required by this app type (e.g., ["mariadb", "redis"]) */
+  readonly requiredServices?: string[];
+
   /** Validate app configuration before deployment */
   validate(config: AppConfig): Promise<boolean>;
 

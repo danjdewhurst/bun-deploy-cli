@@ -20,6 +20,7 @@ import {
   validateGitUrl,
   validateName,
 } from "../core/validation.js";
+import { getServiceHandler } from "../services/index.js";
 import type { AppConfig, DeployResult } from "../types/index.js";
 
 interface CreateAppOptions {
@@ -80,6 +81,39 @@ export async function createApp(name: string, options: CreateAppOptions): Promis
     console.error(`Error: Unknown app type '${appType}'.`);
     console.error("Supported types: bun-app");
     process.exit(1);
+  }
+
+  // Check required services
+  if (handler.requiredServices && handler.requiredServices.length > 0) {
+    const missingServices: string[] = [];
+
+    for (const serviceName of handler.requiredServices) {
+      const serviceHandler = getServiceHandler(serviceName);
+      if (!serviceHandler) {
+        console.error(`Error: App type '${appType}' requires unknown service '${serviceName}'.`);
+        process.exit(1);
+      }
+
+      const isInstalled = await serviceHandler.isInstalled(server);
+      if (!isInstalled) {
+        missingServices.push(serviceName);
+      }
+    }
+
+    if (missingServices.length > 0) {
+      console.error(
+        `\nError: This app requires the following services that are not installed on '${options.server}':`,
+      );
+      for (const svc of missingServices) {
+        console.error(`  - ${svc}`);
+      }
+      console.error(`\nInstall them with:`);
+      for (const svc of missingServices) {
+        console.error(`  bun-deploy service install ${options.server} ${svc}`);
+      }
+      console.error();
+      process.exit(1);
+    }
   }
 
   // Check for port collisions and find an available port
